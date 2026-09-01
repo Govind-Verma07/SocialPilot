@@ -1,6 +1,5 @@
 # 🚀 SocialPilot — Social Media Management Platform
-backend:- .venv\Scripts\activate
-          uvicorn app.main:app --reload
+backend:- .venv\Scripts\activate uvicorn app.main:app --reload
 
 fronten:- npm run dev
 
