@@ -42,8 +42,9 @@ api.interceptors.response.use(
 export const authApi = {
   register:       (data) => api.post('/auth/register', data),
   login:          (data) => api.post('/auth/login', data),
-  me:             ()     => api.get('/auth/me'),
   logout:         ()     => api.post('/auth/logout'),
+  me:             ()     => api.get('/auth/me'),
+  getGoogleAuthUrl: ()   => api.get('/auth/google/url'),
   updateProfile:  (data) => api.patch('/users/me', data),
   getSettings:    ()     => api.get('/users/me/settings'),
   updateSettings: (data) => api.put('/users/me/settings', data),

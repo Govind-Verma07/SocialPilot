@@ -92,7 +92,10 @@ html {
 
 body {
   font-family: var(--font-body);
-  background: var(--clr-bg-deep);
+  background:
+    radial-gradient(ellipse at 20% 80%, rgba(124,58,237,0.05) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(6,182,212,0.04) 0%, transparent 50%),
+    var(--clr-bg-deep);
   color: var(--clr-text-primary);
   line-height: 1.6;
   min-height: 100vh;
@@ -287,35 +290,14 @@ a:hover { color: var(--clr-accent-3); }
   animation: shake 0.3s var(--ease-default);
 }
 
-/* ── Orb background blobs ──────────────────────────────────── */
-.orb {
-  position: fixed;
-  border-radius: 50%;
-  filter: blur(80px);
-  pointer-events: none;
-  z-index: 0;
-  animation: orbFloat 8s ease-in-out infinite;
-}
-.orb-1 {
-  width: 600px; height: 600px;
-  top: -200px; left: -200px;
-  background: radial-gradient(circle, rgba(124,58,237,0.2) 0%, transparent 70%);
-  animation-duration: 10s;
-}
-.orb-2 {
-  width: 500px; height: 500px;
-  bottom: -150px; right: -150px;
-  background: radial-gradient(circle, rgba(6,182,212,0.18) 0%, transparent 70%);
-  animation-duration: 13s;
-  animation-delay: -4s;
-}
-.orb-3 {
-  width: 400px; height: 400px;
-  top: 40%; left: 50%;
-  transform: translate(-50%, -50%);
-  background: radial-gradient(circle, rgba(79,70,229,0.12) 0%, transparent 70%);
-  animation-duration: 15s;
-  animation-delay: -7s;
+/* ── Subtle background gradient ──────────────────────────────── */
+.body-bg {
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse at 20% 80%, rgba(124,58,237,0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(6,182,212,0.05) 0%, transparent 50%),
+    var(--clr-bg-deep);
+  background-attachment: fixed;
 }
 
 /* ── Alert / notification ──────────────────────────────────── */
@@ -366,14 +348,9 @@ a:hover { color: var(--clr-accent-3); }
 }
 
 /* ── Animations ────────────────────────────────────────────── */
-@keyframes orbFloat {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33%       { transform: translate(30px, -20px) scale(1.05); }
-  66%       { transform: translate(-20px, 15px) scale(0.97); }
-}
-
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 
 @keyframes fadeSlideIn {
@@ -420,3 +397,219 @@ a:hover { color: var(--clr-accent-3); }
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover { background: rgba(124, 58, 237, 0.5); }
+
+@keyframes borderGlow {
+  0%, 100% { box-shadow: 0 0 0 0px rgba(124,58,237,0.4); }
+  50%      { box-shadow: 0 0 0 8px rgba(124,58,237,0); }
+}
+
+/* ── Shared Layout Components ──────────────────────────────── */
+
+/* App layout (dashboard & management pages) */
+.app-layout,
+.dashboard {
+  min-height: 100vh;
+  display: flex;
+  padding: 24px 24px 24px 308px;
+  gap: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.app-main,
+.dashboard-main {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Page header */
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.mobile-toggle {
+  display: none;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--clr-text-primary);
+  font-size: 20px;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--dur-fast) var(--ease-default);
+}
+
+.mobile-toggle:hover {
+  background: rgba(124, 58, 237, 0.12);
+  border-color: rgba(124, 58, 237, 0.3);
+  color: var(--clr-accent-1);
+}
+
+.page-title {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.page-subtitle {
+  font-size: 14px;
+  color: var(--clr-text-muted);
+  margin-top: 2px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Section elements */
+.section-heading {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.section-subheading {
+  font-size: 13px;
+  color: var(--clr-text-muted);
+  margin-bottom: 24px;
+  line-height: 1.5;
+}
+
+.section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.ds-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+/* Form actions */
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.form-input.form-select {
+  cursor: pointer;
+  background-color: rgba(10, 13, 26, 0.95);
+  color: var(--clr-text-primary);
+}
+
+.form-input.form-select option {
+  background-color: #0d1124;
+  color: #fff;
+}
+
+/* Loading card */
+.loading-card {
+  padding: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--clr-text-secondary);
+}
+
+/* Empty state */
+.empty-team-card {
+  padding: 64px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 540px;
+  margin: 40px auto;
+}
+
+.empty-icon {
+  font-size: 54px;
+  margin-bottom: 16px;
+}
+
+.empty-title {
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.empty-desc {
+  font-size: 14px;
+  color: var(--clr-text-secondary);
+  line-height: 1.6;
+  margin-bottom: 24px;
+}
+
+/* Dashboard stats grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+/* Dashboard lower section */
+.dashboard-lower {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 20px;
+  align-items: start;
+}
+
+.dashboard-section {
+  padding: 28px;
+}
+
+/* Posts list */
+.posts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Responsive overrides */
+@media (max-width: 1024px) {
+  .dashboard-lower { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 900px) {
+  .app-layout { padding: 16px; }
+  .mobile-toggle { display: flex; }
+}
+
+@media (max-width: 768px) {
+  .page-title { font-size: 22px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

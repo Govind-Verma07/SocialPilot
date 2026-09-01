@@ -1,6 +1,5 @@
 /**
  * src/pages/TeamPage.jsx
- * ----------------------
  * Workspace & Team Management page.
  * Allows creating workspaces, viewing members, inviting members, updating roles, and member removal.
  */
@@ -9,6 +8,13 @@ import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { teamApi } from '../api/teamApi'
 import Sidebar from '../components/Sidebar'
+import Navbar from '../components/Navbar'
+import Modal from '../components/Modal'
+import Button from '../components/ui/Button'
+import Input from '../components/ui/Input'
+import GlowCard from '../components/ui/GlowCard'
+import LoadingState from '../components/ui/LoadingState'
+import ErrorMessage from '../components/ui/ErrorMessage'
 import './TeamPage.css'
 
 export default function TeamPage() {
@@ -90,7 +96,6 @@ export default function TeamPage() {
         email: inviteEmail.trim(),
         role: inviteRole,
       })
-      // Update local team members
       setTeams((prev) =>
         prev.map((t) =>
           t.id === activeTeam.id
@@ -101,7 +106,7 @@ export default function TeamPage() {
       setShowInviteModal(false)
       setInviteEmail('')
       setInviteRole('member')
-      setSuccessMsg(`Member invited successfully!`)
+      setSuccessMsg('Member invited successfully!')
       setTimeout(() => setSuccessMsg(''), 4000)
     } catch (err) {
       setErrorMsg(err.response?.data?.detail || 'Failed to invite team member.')
@@ -116,10 +121,7 @@ export default function TeamPage() {
       setTeams((prev) =>
         prev.map((t) =>
           t.id === activeTeam.id
-            ? {
-                ...t,
-                members: t.members.map((m) => (m.id === memberId ? data : m)),
-              }
+            ? { ...t, members: t.members.map((m) => (m.id === memberId ? data : m)) }
             : t
         )
       )
@@ -156,30 +158,16 @@ export default function TeamPage() {
   }
 
   return (
-    <div className="app-layout">
-      <div className="orb orb-1" />
-      <div className="orb orb-2" />
-
+    <div className="app-layout body-bg">
       <Sidebar mobileOpen={mobileNav} onCloseMobile={() => setMobileNav(false)} />
 
       <main className="app-main">
-        {/* Header */}
-        <header className="page-header">
-          <div className="header-left">
-            <button className="mobile-toggle" onClick={() => setMobileNav(true)} aria-label="Open menu">
-              ☰
-            </button>
-            <div>
-              <h1 className="page-title">Team & Workspace</h1>
-              <p className="page-subtitle">Manage shared workspaces and collaborate with team members.</p>
-            </div>
-          </div>
-          <div className="header-actions">
-            <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
-              + Create Workspace
-            </button>
-          </div>
-        </header>
+        <Navbar
+          pageTitle="Team & Workspace"
+          pageSubtitle="Manage shared workspaces and collaborate with team members."
+          mobileMenuLabel="Open menu"
+          onMobileMenu={() => setMobileNav(true)}
+        />
 
         {successMsg && (
           <div className="alert alert-success" role="alert">
@@ -188,29 +176,21 @@ export default function TeamPage() {
           </div>
         )}
 
-        {errorMsg && (
-          <div className="alert alert-error" role="alert">
-            <span>⚠️</span>
-            <span>{errorMsg}</span>
-          </div>
-        )}
+        {errorMsg && <ErrorMessage message={errorMsg} />}
 
         {loading ? (
-          <div className="glass-card loading-card">
-            <span className="spinner" /> Loading workspaces…
-          </div>
+          <LoadingState message="Loading workspaces…" size="lg" />
         ) : teams.length === 0 ? (
-          /* Empty state */
-          <div className="glass-card empty-team-card">
+          <GlowCard className="empty-team-card" hover={false}>
             <div className="empty-icon">👥</div>
             <h2 className="empty-title">No Workspace Found</h2>
             <p className="empty-desc">
               Create your workspace to organize your social accounts and collaborate with your team.
             </p>
-            <button className="btn btn-primary btn-lg" onClick={() => setShowCreateModal(true)}>
+            <Button variant="primary" size="lg" onClick={() => setShowCreateModal(true)}>
               Create Your First Workspace →
-            </button>
-          </div>
+            </Button>
+          </GlowCard>
         ) : (
           <div className="team-content">
             {/* Workspace switcher tabs */}
@@ -228,10 +208,10 @@ export default function TeamPage() {
               </div>
             )}
 
-            {/* Active Workspace Card */}
             {activeTeam && (
               <>
-                <div className="glass-card workspace-summary-card">
+                {/* Workspace Summary */}
+                <GlowCard className="workspace-summary-card" hover={false}>
                   <div className="ws-info-top">
                     <div>
                       <div className="ws-badge-row">
@@ -240,22 +220,30 @@ export default function TeamPage() {
                       </div>
                       <h2 className="ws-name">{activeTeam.name}</h2>
                       <p className="ws-date">
-                        Created on {new Date(activeTeam.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                        Created on{' '}
+                        {new Date(activeTeam.created_at).toLocaleDateString('en-US', {
+                          month: 'long',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
                       </p>
                     </div>
-                    <button className="btn btn-outline" onClick={() => setShowInviteModal(true)}>
-                      + Add Member
-                    </button>
+                    {activeTeam.is_owner && (
+                      <Button variant="outline" size="sm" onClick={() => setShowInviteModal(true)}>
+                        + Add Member
+                      </Button>
+                    )}
                   </div>
-                </div>
+                </GlowCard>
 
                 {/* Members Section */}
-                <div className="glass-card members-card">
+                <GlowCard className="members-card" hover={false}>
                   <div className="section-title-row">
                     <div>
                       <h3 className="section-heading">Workspace Members</h3>
                       <p className="section-subheading">
-                        {activeTeam.members?.length || 0} user{(activeTeam.members?.length || 0) === 1 ? '' : 's'} with access to this workspace.
+                        {activeTeam.members?.length || 0} user
+                        {(activeTeam.members?.length || 0) === 1 ? '' : 's'} with access to this workspace.
                       </p>
                     </div>
                   </div>
@@ -285,7 +273,8 @@ export default function TeamPage() {
                                   <div className="member-avatar">{initials}</div>
                                   <div>
                                     <span className="member-name">
-                                      {m.full_name || 'Anonymous User'} {isCurrentUser && <span className="you-pill">You</span>}
+                                      {m.full_name || 'Anonymous User'}{' '}
+                                      {isCurrentUser && <span className="you-pill">You</span>}
                                     </span>
                                     <span className="member-email">{m.email}</span>
                                   </div>
@@ -304,12 +293,18 @@ export default function TeamPage() {
                                   </select>
                                 ) : (
                                   <span className={`member-role-badge role-${m.role}`}>
-                                    {m.role === 'owner' ? '👑 Owner' : m.role.charAt(0).toUpperCase() + m.role.slice(1)}
+                                    {m.role === 'owner'
+                                      ? '👑 Owner'
+                                      : m.role.charAt(0).toUpperCase() + m.role.slice(1)}
                                   </span>
                                 )}
                               </td>
                               <td className="member-joined-cell">
-                                {new Date(m.joined_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                {new Date(m.joined_at).toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric',
+                                })}
                               </td>
                               <td style={{ textAlign: 'right' }}>
                                 {!isOwnerRow && (activeTeam.is_owner || isCurrentUser) && (
@@ -328,105 +323,104 @@ export default function TeamPage() {
                       </tbody>
                     </table>
                   </div>
-                </div>
+                </GlowCard>
               </>
             )}
           </div>
         )}
 
-        {/* Modal: Create Workspace */}
-        {showCreateModal && (
-          <div className="modal-backdrop" onClick={() => setShowCreateModal(false)}>
-            <div className="modal-card glass-card" onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
-                <h3 className="modal-title">Create New Workspace</h3>
-                <button className="modal-close" onClick={() => setShowCreateModal(false)}>✕</button>
-              </div>
-              <form onSubmit={handleCreateTeam}>
-                <div className="form-group" style={{ marginBottom: '20px' }}>
-                  <label className="form-label" htmlFor="workspace-name-input">
-                    Workspace Name
-                  </label>
-                  <input
-                    id="workspace-name-input"
-                    type="text"
-                    placeholder="e.g. Acme Marketing, Personal Brand"
-                    value={newTeamName}
-                    onChange={(e) => setNewTeamName(e.target.value)}
-                    className="form-input"
-                    required
-                    autoFocus
-                  />
-                </div>
-                <div className="modal-actions">
-                  <button type="button" className="btn btn-ghost" onClick={() => setShowCreateModal(false)}>
-                    Cancel
-                  </button>
-                  <button type="submit" className="btn btn-primary" disabled={creatingTeam}>
-                    {creatingTeam ? 'Creating…' : 'Create Workspace'}
-                  </button>
-                </div>
-              </form>
+        {/* ── Create Workspace Modal ── */}
+        <Modal
+          isOpen={showCreateModal}
+          onClose={() => setShowCreateModal(false)}
+          title="Create New Workspace"
+          size="md"
+          footer={
+            <div className="modal-actions">
+              <Button variant="ghost" onClick={() => setShowCreateModal(false)}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                loading={creatingTeam}
+                disabled={creatingTeam}
+                form="create-workspace-form"
+              >
+                {creatingTeam ? 'Creating…' : 'Create Workspace'}
+              </Button>
             </div>
-          </div>
-        )}
+          }
+        >
+          <form id="create-workspace-form" onSubmit={handleCreateTeam} className="modal-form">
+            <Input
+              id="workspace-name-input"
+              name="workspaceName"
+              label="Workspace Name"
+              type="text"
+              placeholder="e.g. Acme Marketing, Personal Brand"
+              value={newTeamName}
+              onChange={(e) => setNewTeamName(e.target.value)}
+              required
+              autoComplete="off"
+            />
+          </form>
+        </Modal>
 
-        {/* Modal: Add Member */}
-        {showInviteModal && (
-          <div className="modal-backdrop" onClick={() => setShowInviteModal(false)}>
-            <div className="modal-card glass-card" onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
-                <h3 className="modal-title">Add Team Member</h3>
-                <button className="modal-close" onClick={() => setShowInviteModal(false)}>✕</button>
-              </div>
-              <form onSubmit={handleAddMember}>
-                <div className="form-group" style={{ marginBottom: '16px' }}>
-                  <label className="form-label" htmlFor="member-email-input">
-                    User Email Address
-                  </label>
-                  <input
-                    id="member-email-input"
-                    type="email"
-                    placeholder="colleague@example.com"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    className="form-input"
-                    required
-                    autoFocus
-                  />
-                  <span className="field-hint">
-                    The user must have an active SocialPilot account.
-                  </span>
-                </div>
-
-                <div className="form-group" style={{ marginBottom: '24px' }}>
-                  <label className="form-label" htmlFor="member-role-select">
-                    Workspace Role
-                  </label>
-                  <select
-                    id="member-role-select"
-                    value={inviteRole}
-                    onChange={(e) => setInviteRole(e.target.value)}
-                    className="form-input form-select"
-                  >
-                    <option value="admin">Admin (Can invite members and manage accounts)</option>
-                    <option value="member">Member (Can create posts and manage connected accounts)</option>
-                    <option value="viewer">Viewer (Read-only access to workspace)</option>
-                  </select>
-                </div>
-
-                <div className="modal-actions">
-                  <button type="button" className="btn btn-ghost" onClick={() => setShowInviteModal(false)}>
-                    Cancel
-                  </button>
-                  <button type="submit" className="btn btn-primary" disabled={inviting}>
-                    {inviting ? 'Adding…' : 'Add Member'}
-                  </button>
-                </div>
-              </form>
+        {/* ── Add Member Modal ── */}
+        <Modal
+          isOpen={showInviteModal}
+          onClose={() => setShowInviteModal(false)}
+          title="Add Team Member"
+          size="md"
+          footer={
+            <div className="modal-actions">
+              <Button variant="ghost" onClick={() => setShowInviteModal(false)}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                loading={inviting}
+                disabled={inviting}
+                form="add-member-form"
+              >
+                {inviting ? 'Adding…' : 'Add Member'}
+              </Button>
             </div>
-          </div>
-        )}
+          }
+        >
+          <form id="add-member-form" onSubmit={handleAddMember} className="modal-form">
+            <Input
+              id="member-email-input"
+              name="inviteEmail"
+              label="User Email Address"
+              type="email"
+              placeholder="colleague@example.com"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              hint="The user must have an active SocialPilot account."
+              required
+              autoComplete="email"
+            />
+
+            <div className="form-group">
+              <label className="form-label" htmlFor="member-role-select">
+                Workspace Role
+              </label>
+              <select
+                id="member-role-select"
+                value={inviteRole}
+                onChange={(e) => setInviteRole(e.target.value)}
+                className="form-input form-select"
+              >
+                <option value="admin">Admin (Can invite members and manage accounts)</option>
+                <option value="member">Member (Can create posts and manage connected accounts)</option>
+                <option value="viewer">Viewer (Read-only access to workspace)</option>
+              </select>
+            </div>
+          </form>
+        </Modal>
       </main>
     </div>
   )

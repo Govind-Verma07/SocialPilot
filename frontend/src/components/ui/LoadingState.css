@@ -1,0 +1,24 @@
+/* LoadingState.css */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px;
+  color: var(--clr-text-secondary);
+}
+
+.loading-state.size-sm { padding: 20px; }
+.loading-state.size-md { padding: 40px; }
+.loading-state.size-lg { padding: 80px; }
+
+.loading-msg {
+  font-size: 14px;
+  color: var(--clr-text-muted);
+}
+
+.loading-state .spinner {
+  width: 24px;
+  height: 24px;
+}

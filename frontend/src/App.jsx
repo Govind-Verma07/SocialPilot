@@ -1,20 +1,24 @@
 /**
  * src/App.jsx
  * -----------
- * Root router. Defines all page routes with auth protection.
+ * Root router. Defines all page routes with auth protection aligned strictly with SocialPilot PDF Spec.
  */
 
 import { BrowserRouter, Route, Routes, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
-import LandingPage   from './pages/LandingPage'
-import LoginPage     from './pages/LoginPage'
-import RegisterPage  from './pages/RegisterPage'
-import DashboardPage from './pages/DashboardPage'
-import AccountsPage  from './pages/AccountsPage'
-import ProfilePage   from './pages/ProfilePage'
-import SettingsPage  from './pages/SettingsPage'
-import TeamPage      from './pages/TeamPage'
+import LandingPage       from './pages/LandingPage'
+import LoginPage         from './pages/LoginPage'
+import RegisterPage      from './pages/RegisterPage'
+import DashboardPage     from './pages/DashboardPage'
+import AccountsPage      from './pages/AccountsPage'
+import PostsPage         from './pages/PostsPage'
+import CampaignsPage     from './pages/CampaignsPage'
+import AnalyticsPage     from './pages/AnalyticsPage'
+import NotificationsPage from './pages/NotificationsPage'
+import ProfilePage       from './pages/ProfilePage'
+import SettingsPage      from './pages/SettingsPage'
+import TeamPage          from './pages/TeamPage'
 
 export default function App() {
   return (
@@ -37,6 +41,38 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <AccountsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/posts"
+            element={
+              <ProtectedRoute>
+                <PostsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/campaigns"
+            element={
+              <ProtectedRoute>
+                <CampaignsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/analytics"
+            element={
+              <ProtectedRoute>
+                <AnalyticsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/notifications"
+            element={
+              <ProtectedRoute>
+                <NotificationsPage />
               </ProtectedRoute>
             }
           />
@@ -64,8 +100,8 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-          {/* Catch-all → landing */}
-          <Route path="*" element={<Navigate to="/" replace />} />
+          {/* Catch-all → dashboard (ProtectedRoute will handle unauthenticated) */}
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

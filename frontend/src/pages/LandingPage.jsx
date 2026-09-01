@@ -1,59 +1,40 @@
 /**
  * src/pages/LandingPage.jsx
- * -------------------------
  * Premium landing page with animated hero, feature grid, and CTAs.
  */
 
 import { useEffect, useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
+import logoImg from '../assets/logo.png'
 import './LandingPage.css'
 
 const features = [
-  {
-    icon: '📅',
-    title: 'Smart Scheduling',
-    desc: 'Queue posts across all platforms. Our AI picks the best time to maximise reach.',
-  },
-  {
-    icon: '📊',
-    title: 'Deep Analytics',
-    desc: 'Track engagement, growth, and ROI with beautiful real-time dashboards.',
-  },
-  {
-    icon: '🤖',
-    title: 'AI Content Studio',
-    desc: 'Generate captions, hashtags and visuals in seconds with built-in AI.',
-  },
-  {
-    icon: '🔗',
-    title: 'Multi-Platform',
-    desc: 'Manage Instagram, X, LinkedIn, TikTok and more from one unified hub.',
-  },
-  {
-    icon: '🎯',
-    title: 'Campaign Manager',
-    desc: 'Plan end-to-end campaigns with calendar view, teams, and approvals.',
-  },
-  {
-    icon: '🔔',
-    title: 'Smart Alerts',
-    desc: 'Get notified when posts go viral or when engagement spikes unexpectedly.',
-  },
+  { icon: '📅', title: 'Smart Scheduling', desc: 'Queue posts across all platforms. Our AI picks the best time to maximise reach.' },
+  { icon: '📊', title: 'Deep Analytics', desc: 'Track engagement, growth, and ROI with beautiful real-time dashboards.' },
+  { icon: '🤖', title: 'AI Content Studio', desc: 'Generate captions, hashtags and visuals in seconds with built-in AI.' },
+  { icon: '🔗', title: 'Multi-Platform', desc: 'Manage Instagram, X, LinkedIn, TikTok and more from one unified hub.' },
+  { icon: '🎯', title: 'Campaign Manager', desc: 'Plan end-to-end campaigns with calendar view, teams, and approvals.' },
+  { icon: '🔔', title: 'Smart Alerts', desc: 'Get notified when posts go viral or when engagement spikes unexpectedly.' },
 ]
 
 const platforms = [
-  { name: 'Instagram', color: '#E1306C', icon: '📸' },
-  { name: 'X / Twitter', color: '#1DA1F2', icon: '𝕏' },
-  { name: 'LinkedIn',   color: '#0A66C2', icon: '💼' },
-  { name: 'TikTok',     color: '#69C9D0', icon: '🎵' },
-  { name: 'Facebook',   color: '#1877F2', icon: '👥' },
-  { name: 'YouTube',    color: '#FF0000', icon: '▶️' },
+  { name: 'Instagram', color: '#E1306C' },
+  { name: 'X / Twitter', color: '#1DA1F2' },
+  { name: 'LinkedIn',   color: '#0A66C2' },
+  { name: 'TikTok',     color: '#69C9D0' },
+  { name: 'Facebook',   color: '#1877F2' },
+  { name: 'YouTube',    color: '#FF0000' },
 ]
 
 export default function LandingPage() {
+  const { isAuthenticated } = useAuth()
   const heroRef = useRef(null)
 
-  // Subtle parallax on mouse move
+  if (isAuthenticated) {
+    return <Navigate to="/dashboard" replace />
+  }
+
   useEffect(() => {
     const el = heroRef.current
     if (!el) return
@@ -69,16 +50,11 @@ export default function LandingPage() {
   }, [])
 
   return (
-    <div className="landing">
-      {/* Background orbs */}
-      <div className="orb orb-1" />
-      <div className="orb orb-2" />
-      <div className="orb orb-3" />
-
+    <div className="landing body-bg">
       {/* ── Navbar ── */}
       <nav className="landing-nav">
         <div className="nav-brand">
-          <div className="brand-icon">🚀</div>
+          <span className="brand-icon">🚀</span>
           <span className="brand-name">SocialPilot</span>
         </div>
         <div className="nav-links">
@@ -92,13 +68,12 @@ export default function LandingPage() {
         <div className="hero-badge">✨ The all-in-one social media command centre</div>
 
         <h1 className="hero-title">
-          Pilot your brand's<br />
-          <span className="gradient-text">social presence</span>
+          Manage. Schedule. Grow.
         </h1>
 
         <p className="hero-subtitle">
-          Schedule, analyse, and grow across every platform — all from one
-          beautifully designed workspace powered by AI.
+          Pilot your brand's social presence across every platform — all from one beautifully
+          designed workspace powered by AI.
         </p>
 
         <div className="hero-cta">
@@ -112,24 +87,15 @@ export default function LandingPage() {
 
         {/* Floating platform pills */}
         <div className="platform-orbit">
-          {platforms.map((p, i) => (
-            <div
-              key={p.name}
-              className="platform-pill"
-              style={{
-                '--i': i,
-                '--total': platforms.length,
-                '--color': p.color,
-              }}
-            >
-              <span>{p.icon}</span>
-              <span>{p.name}</span>
-            </div>
+          {platforms.map((p) => (
+            <span key={p.name} className="platform-pill" style={{ '--color': p.color }}>
+              {p.name}
+            </span>
           ))}
         </div>
 
         {/* Hero mock card */}
-        <div className="hero-card glass-card">
+        <div className="hero-card glow-card">
           <div className="mock-topbar">
             <div className="mock-dot red" />
             <div className="mock-dot yellow" />
@@ -170,7 +136,7 @@ export default function LandingPage() {
 
         <div className="features-grid">
           {features.map((f) => (
-            <div key={f.title} className="feature-card glass-card">
+            <div key={f.title} className="feature-card glow-card">
               <div className="feature-icon">{f.icon}</div>
               <h3 className="feature-title">{f.title}</h3>
               <p className="feature-desc">{f.desc}</p>
@@ -181,7 +147,7 @@ export default function LandingPage() {
 
       {/* ── CTA Strip ── */}
       <section className="cta-section">
-        <div className="cta-card glass-card">
+        <div className="cta-card glow-card">
           <h2 className="cta-title">Ready to take off?</h2>
           <p className="cta-subtitle">Join thousands of brands already piloting smarter.</p>
           <Link to="/register" className="btn btn-primary btn-lg">
@@ -193,7 +159,7 @@ export default function LandingPage() {
       {/* ── Footer ── */}
       <footer className="landing-footer">
         <div className="nav-brand">
-          <div className="brand-icon">🚀</div>
+          <span className="brand-icon">🚀</span>
           <span className="brand-name">SocialPilot</span>
         </div>
         <p className="footer-copy">© 2026 SocialPilot. All rights reserved.</p>

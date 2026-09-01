@@ -1,123 +1,129 @@
 /**
  * src/context/AuthContext.jsx
- * ----------------------------
- * Global authentication state.
- * Persists access token + user profile in localStorage so sessions survive
- * page refreshes.
+ * ---------------------------
+ * Provides global auth state (user, loading) and actions (register, login, logout).
+ * Persists JWT token and user object in localStorage under 'sp_access_token' / 'sp_user'.
  */
 
-import { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { authApi } from '../api/authApi'
 
+// ── Context ──────────────────────────────────────────────────────────────────
 const AuthContext = createContext(null)
 
-const TOKEN_KEY = 'sp_access_token'
-const USER_KEY  = 'sp_user'
-
+// ── Provider ─────────────────────────────────────────────────────────────────
 export function AuthProvider({ children }) {
-  const [user,  setUser]  = useState(() => {
-    try { return JSON.parse(localStorage.getItem(USER_KEY)) } catch { return null }
+  const [user, setUser]       = useState(() => {
+    try { return JSON.parse(localStorage.getItem('sp_user')) ?? null }
+    catch { return null }
   })
-  const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) ?? null)
   const [loading, setLoading] = useState(false)
 
-  // ── Persist helpers ─────────────────────────────────────────────────────
-  const persist = useCallback((accessToken, userObj) => {
-    localStorage.setItem(TOKEN_KEY, accessToken)
-    localStorage.setItem(USER_KEY, JSON.stringify(userObj))
-    setToken(accessToken)
-    setUser(userObj)
+  // On mount, re-validate token with the server if we have one
+  useEffect(() => {
+    const token = localStorage.getItem('sp_access_token')
+    if (!token) return
+
+    let cancelled = false
+    authApi.me()
+      .then(({ data }) => {
+        if (!cancelled) setUser(data.user ?? data)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          localStorage.removeItem('sp_access_token')
+          localStorage.removeItem('sp_user')
+          setUser(null)
+        }
+      })
+    return () => { cancelled = true }
   }, [])
 
-  const clear = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY)
-    localStorage.removeItem(USER_KEY)
-    setToken(null)
-    setUser(null)
-  }, [])
-
-  const formatError = (err, defaultMsg) => {
-    if (!err.response) {
-      return 'Unable to connect to backend server. Please verify the backend is running at http://localhost:8000.'
-    }
-    const detail = err.response?.data?.detail
-    if (typeof detail === 'string') return detail
-    if (Array.isArray(detail)) {
-      return detail.map((item) => item.msg || item.message || JSON.stringify(item)).join('. ')
-    }
-    if (detail && typeof detail === 'object') {
-      return detail.msg || detail.message || JSON.stringify(detail)
-    }
-    return defaultMsg
-  }
-
-  // ── Actions ─────────────────────────────────────────────────────────────
+  // ── register ───────────────────────────────────────────────────────────────
   const register = useCallback(async ({ fullName, email, password, role }) => {
     setLoading(true)
     try {
-      const { data } = await authApi.register({
-        full_name: fullName,
-        email,
-        password,
-        role: role || 'content_creator',
-      })
-      persist(data.access_token, data.user)
+      const { data } = await authApi.register({ full_name: fullName, email, password, role })
+      const token = data.access_token ?? data.accessToken ?? data.token
+      const userData = data.user ?? { fullName, email, role }
+      if (token) localStorage.setItem('sp_access_token', token)
+      localStorage.setItem('sp_user', JSON.stringify(userData))
+      setUser(userData)
       return { success: true }
     } catch (err) {
-      return { success: false, message: formatError(err, 'Registration failed.') }
+      const message =
+        err.response?.data?.detail ??
+        err.response?.data?.message ??
+        err.response?.data?.error ??
+        'Registration failed. Please try again.'
+      return { success: false, message }
     } finally {
       setLoading(false)
     }
-  }, [persist])
+  }, [])
 
+  // ── login ──────────────────────────────────────────────────────────────────
   const login = useCallback(async ({ email, password }) => {
     setLoading(true)
     try {
       const { data } = await authApi.login({ email, password })
-      persist(data.access_token, data.user)
+      const token = data.access_token ?? data.accessToken ?? data.token
+      const userData = data.user ?? { email }
+      if (token) localStorage.setItem('sp_access_token', token)
+      localStorage.setItem('sp_user', JSON.stringify(userData))
+      setUser(userData)
       return { success: true }
     } catch (err) {
-      return { success: false, message: formatError(err, 'Login failed.') }
-    } finally {
-      setLoading(false)
-    }
-  }, [persist])
-
-  const updateProfile = useCallback(async (profileData) => {
-    setLoading(true)
-    try {
-      const { data } = await authApi.updateProfile(profileData)
-      setUser(data)
-      localStorage.setItem(USER_KEY, JSON.stringify(data))
-      return { success: true, user: data }
-    } catch (err) {
-      return { success: false, message: formatError(err, 'Failed to update profile.') }
+      const message =
+        err.response?.data?.detail ??
+        err.response?.data?.message ??
+        err.response?.data?.error ??
+        'Invalid email or password.'
+      return { success: false, message }
     } finally {
       setLoading(false)
     }
   }, [])
 
+  // ── logout ─────────────────────────────────────────────────────────────────
   const logout = useCallback(async () => {
-    try { await authApi.logout() } catch { /* ignore */ }
-    clear()
-  }, [clear])
+    try {
+      if (typeof authApi.logout === 'function') {
+        await authApi.logout()
+      }
+    } catch {
+      // Ignore API errors during logout
+    } finally {
+      localStorage.removeItem('sp_access_token')
+      localStorage.removeItem('sp_user')
+      setUser(null)
+    }
+  }, [])
 
-  // ── Re-validate token on mount ──────────────────────────────────────────
-  useEffect(() => {
-    if (!token) return
-    authApi.me()
-      .then(({ data }) => setUser(data))
-      .catch(() => clear())
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  // ── updateUser (for ProfilePage / SettingsPage) ────────────────────────────
+  const updateUser = useCallback((partial) => {
+    setUser((prev) => {
+      const next = { ...prev, ...partial }
+      localStorage.setItem('sp_user', JSON.stringify(next))
+      return next
+    })
+  }, [])
+
+  // ── loginWithToken (OAuth) ──────────────────────────────────────────────────
+  const loginWithToken = useCallback((token, userData) => {
+    if (token) localStorage.setItem('sp_access_token', token)
+    if (userData) localStorage.setItem('sp_user', JSON.stringify(userData))
+    setUser(userData)
+  }, [])
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, register, login, logout, updateProfile, isAuthenticated: !!token }}>
+    <AuthContext.Provider value={{ user, loading, isAuthenticated: !!user, register, login, loginWithToken, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   )
 }
 
-// eslint-disable-next-line react-refresh/only-export-components
+// ── Hook ──────────────────────────────────────────────────────────────────────
 export function useAuth() {
   const ctx = useContext(AuthContext)
   if (!ctx) throw new Error('useAuth must be used inside <AuthProvider>')

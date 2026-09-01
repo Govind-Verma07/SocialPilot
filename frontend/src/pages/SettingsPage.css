@@ -1,4 +1,4 @@
-/* SettingsPage.css */
+/* SettingsPage.css — settings-specific styles (shared layout in index.css) */
 
 .settings-container {
   display: flex;
@@ -11,30 +11,10 @@
   padding: 32px;
 }
 
-.loading-card {
-  padding: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  color: var(--clr-text-secondary);
-}
-
 .settings-form {
   display: flex;
   flex-direction: column;
   gap: 24px;
-}
-
-.form-select {
-  cursor: pointer;
-  background-color: rgba(10, 13, 26, 0.95);
-  color: var(--clr-text-primary);
-}
-
-.form-select option {
-  background-color: #0d1124;
-  color: #fff;
 }
 
 .setting-toggle-row {
@@ -177,14 +157,4 @@ input:checked + .slider:before {
 .danger-desc {
   font-size: 12px;
   color: var(--clr-text-muted);
-}
-
-.danger-btn {
-  border-color: rgba(239, 68, 68, 0.4);
-  color: #f87171;
-}
-
-.danger-btn:hover {
-  background: rgba(239, 68, 68, 0.15);
-  border-color: #ef4444;
 }

@@ -2,15 +2,16 @@
 
 .dashboard-sidebar {
   width: 260px;
-  min-height: calc(100vh - 48px);
+  height: calc(100vh - 48px);
   display: flex;
   flex-direction: column;
   padding: 24px 16px;
-  position: sticky;
+  position: fixed;
   top: 24px;
   border-radius: var(--radius-xl);
   flex-shrink: 0;
   z-index: 20;
+  overflow: hidden;
 }
 
 .sidebar-brand {
@@ -24,7 +25,11 @@
 }
 
 .brand-icon-sm {
-  font-size: 24px;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  object-fit: cover;
+  box-shadow: 0 0 14px rgba(124, 58, 237, 0.35);
 }
 
 .brand-name-sm {
@@ -181,7 +186,20 @@
   border-color: #ef4444;
 }
 
+@media (min-width: 901px) {
+  .dashboard-sidebar {
+    position: fixed;
+    top: 24px;
+    left: max(24px, calc((100vw - 1400px) / 2 + 24px));
+    z-index: 50;
+  }
+}
+
 @media (max-width: 900px) {
+  .app-layout,
+  .dashboard {
+    padding: 16px !important;
+  }
   .dashboard-sidebar {
     position: fixed;
     top: 0;
@@ -194,6 +212,7 @@
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     background: rgba(10, 13, 26, 0.98);
     backdrop-filter: blur(20px);
+    z-index: 100;
   }
   .dashboard-sidebar.open {
     transform: translateX(0);
@@ -203,6 +222,6 @@
     inset: 0;
     background: rgba(0, 0, 0, 0.6);
     backdrop-filter: blur(4px);
-    z-index: 19;
+    z-index: 99;
   }
 }

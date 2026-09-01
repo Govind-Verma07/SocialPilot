@@ -1,0 +1,40 @@
+/* AccountsPage.css — accounts-specific styles (master layout in index.css) */
+
+.accounts-section {
+  padding: 28px;
+}
+
+.accounts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 4px;
+}
+
+.platforms-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+  margin-top: 4px;
+}
+
+/* Status badge used inline on account cards (fallback) */
+.account-status-inline {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.account-status-inline .dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+

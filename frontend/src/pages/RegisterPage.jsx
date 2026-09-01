@@ -1,43 +1,71 @@
 /**
  * src/pages/RegisterPage.jsx
  * ---------------------------
- * Registration form with full-name, email, password + confirm password.
- * Real-time strength indicator, animated validation feedback.
+ * Registration form with 3 role options (Content Creator, Marketing Team, Business User),
+ * input field icons, password strength meter, green success alert, and delayed redirect to /login.
  */
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import logoImg from '../assets/logo.png'
 import './AuthPages.css'
 
 function EyeIcon({ open }) {
   return open ? (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-      <circle cx="12" cy="12" r="3"/>
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
     </svg>
   ) : (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
-      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
-      <line x1="1" y1="1" x2="23" y2="23"/>
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+      <line x1="1" y1="1" x2="23" y2="23" />
     </svg>
   )
 }
 
 function CheckIcon() {
   return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-      <polyline points="20 6 9 17 4 12"/>
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  )
+}
+
+function UserIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  )
+}
+
+function MailIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+      <polyline points="22,6 12,13 2,6" />
+    </svg>
+  )
+}
+
+function LockIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
     </svg>
   )
 }
 
 function PasswordStrength({ password }) {
   const checks = useMemo(() => ({
-    length:  password.length >= 8,
-    upper:   /[A-Z]/.test(password),
-    digit:   /[0-9]/.test(password),
+    length: password.length >= 8,
+    upper: /[A-Z]/.test(password),
+    digit: /[0-9]/.test(password),
   }), [password])
 
   const score = Object.values(checks).filter(Boolean).length
@@ -47,66 +75,78 @@ function PasswordStrength({ password }) {
   if (!password) return null
 
   return (
-    <div className="pw-strength">
-      <div className="pw-bars">
+    <div className="pw-strength" style={{ marginTop: '6px' }}>
+      <div className="pw-bars" style={{ display: 'flex', gap: '4px' }}>
         {[0, 1, 2].map((i) => (
           <div
             key={i}
             className="pw-bar"
             style={{
-              background: i < score ? colors[score - 1] : 'rgba(255,255,255,0.08)',
+              flex: 1,
+              height: '3px',
+              borderRadius: '2px',
+              background: i < score ? colors[score - 1] : 'rgba(255,255,255,0.1)',
               transition: `background 0.3s ${i * 0.05}s`,
             }}
           />
         ))}
       </div>
-      <span className="pw-label" style={{ color: score > 0 ? colors[score - 1] : 'transparent' }}>
-        {score > 0 ? labels[score - 1] : ''}
-      </span>
-      <div className="pw-checks">
-        {[
-          { key: 'length', text: '8+ characters' },
-          { key: 'upper',  text: 'Uppercase letter' },
-          { key: 'digit',  text: 'Number' },
-        ].map(({ key, text }) => (
-          <span key={key} className={`pw-check ${checks[key] ? 'met' : ''}`}>
-            {checks[key] ? <CheckIcon /> : '○'} {text}
-          </span>
-        ))}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+        <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: score > 0 ? colors[score - 1] : 'transparent' }}>
+          {score > 0 ? labels[score - 1] : ''}
+        </span>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {[
+            { key: 'length', text: '8+ chars' },
+            { key: 'upper', text: 'Uppercase' },
+            { key: 'digit', text: 'Number' },
+          ].map(({ key, text }) => (
+            <span key={key} style={{ fontSize: '11px', color: checks[key] ? '#10b981' : '#64748b' }}>
+              {checks[key] ? '✓' : '○'} {text}
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   )
 }
 
 export default function RegisterPage() {
-  const { register, loading } = useAuth()
+  const { isAuthenticated, register, loading } = useAuth()
   const navigate = useNavigate()
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard', { replace: true })
+    }
+  }, [isAuthenticated, navigate])
 
   const [form, setForm] = useState({
     fullName: '', email: '', password: '', confirmPassword: '', role: 'content_creator',
   })
-  const [showPw, setShowPw]       = useState(false)
-  const [showCpw, setShowCpw]     = useState(false)
-  const [error, setError]         = useState('')
-  const [touched, setTouched]     = useState({})
+  const [showPw, setShowPw] = useState(false)
+  const [showCpw, setShowCpw] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  const [touched, setTouched] = useState({})
 
   const publicRoles = [
     {
       id: 'content_creator',
       title: 'Content Creator',
-      desc: 'Solopreneurs, influencers, and creative individuals',
-      icon: '🎨',
+      desc: 'Perfect for individual creators, influencers and personal brands.',
+      icon: '🪶',
     },
     {
       id: 'marketing_team',
       title: 'Marketing Team',
-      desc: 'Agencies, brand teams, and marketing squads',
+      desc: 'Ideal for teams and agencies managing multiple accounts.',
       icon: '👥',
     },
     {
       id: 'business_user',
       title: 'Business User',
-      desc: 'Founders, SMB owners, and growing businesses',
+      desc: 'Designed for founders, SMB owners, and growing businesses.',
       icon: '💼',
     },
   ]
@@ -123,10 +163,10 @@ export default function RegisterPage() {
 
   const validate = () => {
     if (form.fullName.trim().length < 2) return 'Full name must be at least 2 characters.'
-    if (!form.email.includes('@'))       return 'Please enter a valid email address.'
-    if (form.password.length < 8)        return 'Password must be at least 8 characters.'
-    if (!/[A-Z]/.test(form.password))    return 'Password must contain an uppercase letter.'
-    if (!/[0-9]/.test(form.password))    return 'Password must contain a number.'
+    if (!form.email.includes('@')) return 'Please enter a valid email address.'
+    if (form.password.length < 8) return 'Password must be at least 8 characters.'
+    if (!/[A-Z]/.test(form.password)) return 'Password must contain an uppercase letter.'
+    if (!/[0-9]/.test(form.password)) return 'Password must contain a number.'
     if (form.password !== form.confirmPassword) return 'Passwords do not match.'
     return null
   }
@@ -136,71 +176,121 @@ export default function RegisterPage() {
     const err = validate()
     if (err) { setError(err); return }
 
+    setError('')
     const result = await register({
       fullName: form.fullName.trim(),
-      email:    form.email,
+      email: form.email,
       password: form.password,
-      role:     form.role,
+      role: form.role,
     })
     if (result.success) {
-      navigate('/dashboard')
+      setSuccess('Account registered successfully! Redirecting to login page...')
+      setTimeout(() => {
+        navigate('/login', { state: { registeredEmail: form.email, registeredSuccess: true } })
+      }, 2000)
     } else {
       setError(result.message)
     }
   }
 
-  const nameErr  = touched.fullName && form.fullName.trim().length < 2 ? 'At least 2 characters.' : ''
+  const nameErr = touched.fullName && form.fullName.trim().length < 2 ? 'At least 2 characters.' : ''
   const emailErr = touched.email && !form.email.includes('@') ? 'Enter a valid email.' : ''
-  const cpwErr   = touched.confirmPassword && form.confirmPassword && form.password !== form.confirmPassword
+  const cpwErr = touched.confirmPassword && form.confirmPassword && form.password !== form.confirmPassword
     ? 'Passwords do not match.' : ''
 
   return (
     <div className="auth-page">
-      <div className="orb orb-1" />
-      <div className="orb orb-2" />
-
-      <Link to="/" className="auth-back">← Back to home</Link>
-
-      <div className="auth-container">
-        {/* Side panel */}
-        <div className="auth-side">
-          <div className="auth-side-content">
-            <div className="brand-icon-lg">🚀</div>
-            <h2 className="auth-side-title">
-              Launch your brand on<br />
-              <span className="gradient-text">every platform</span>
-            </h2>
-            <p className="auth-side-desc">
-              Join thousands of creators and brands using SocialPilot to grow smarter and faster.
-            </p>
-            <div className="auth-perks">
-              {['Free forever plan', 'No credit card required', 'Connect 6+ platforms', 'AI-powered tools'].map(p => (
-                <div key={p} className="perk-item">
-                  <span className="perk-check">✓</span>
-                  <span>{p}</span>
-                </div>
-              ))}
-            </div>
+      {/* Navigation Header */}
+      <header className="auth-nav-header">
+        <Link to="/" className="auth-brand-logo">
+          <div className="brand-icon-orb">
+            <img src={logoImg} alt="Logo" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
           </div>
+          <div className="brand-logo-text">
+            <span className="brand-title">SocialPilot</span>
+            <span className="brand-tagline">Manage. Schedule. Grow.</span>
+          </div>
+        </Link>
+
+        <div className="auth-nav-links">
+          <Link to="/" className="auth-nav-link">Features</Link>
+          <Link to="/" className="auth-nav-link">Pricing</Link>
+          <Link to="/" className="auth-nav-link">Resources ▾</Link>
+          <Link to="/" className="auth-nav-link">About Us</Link>
         </div>
 
-        {/* Form card */}
-        <div className="auth-card glass-card">
-          <div className="auth-card-header">
-            <h1 className="auth-title">Create account</h1>
-            <p className="auth-subtitle">Start your 14-day free trial today</p>
+        <div className="auth-header-badges">
+          <span className="auth-header-badge">🧊 3D Animated UI</span>
+          <span className="auth-header-badge">✨ Dark & Stylish</span>
+          <span className="auth-header-badge">👤 User Friendly</span>
+          <span className="auth-header-badge">🛡️ Secure & Fast</span>
+        </div>
+      </header>
+
+      {/* Hero Title Section */}
+      <section className="auth-hero-section">
+        <h1 className="auth-hero-title">SocialPilot</h1>
+        <p className="auth-hero-subtitle">Smart Social Media Management</p>
+        <div className="auth-hero-line" />
+      </section>
+
+      {/* Register Panel */}
+      <main className="auth-main-container auth-single-center">
+        <div className="neon-card">
+          <div className="neon-card-header">
+            <h2 className="neon-card-title">Create Your Account</h2>
+            <p className="neon-card-subtitle">Join SocialPilot and start your journey</p>
           </div>
 
+          {/* Success Banner */}
+          {success && (
+            <div className="alert-neon-success" role="alert">
+              <span>✅</span>
+              <span>{success}</span>
+            </div>
+          )}
+
+          {/* Error Banner */}
           {error && (
-            <div className="alert alert-error" role="alert">
+            <div className="alert-neon-error" role="alert">
               <span>⚠️</span>
               <span>{error}</span>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="auth-form" noValidate>
-            <div className="form-group">
-              <label className="form-label" htmlFor="reg-fullname">Full name</label>
+          <form onSubmit={handleSubmit} className="neon-form" noValidate>
+            {/* Role Selection Label */}
+            <div style={{ fontSize: '13px', fontWeight: 600, color: '#94a3b8', marginBottom: '-4px' }}>
+              Select Your Role
+            </div>
+
+            {/* 3 Role Selection Cards */}
+            <div className="roles-grid-3">
+              {publicRoles.map((r) => {
+                const isSelected = form.role === r.id
+                return (
+                  <div
+                    key={r.id}
+                    className={`role-card-neon ${isSelected ? 'selected' : ''}`}
+                    onClick={() => handleRoleSelect(r.id)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleRoleSelect(r.id) }}
+                  >
+                    <div className="role-check-badge">
+                      <CheckIcon />
+                    </div>
+                    <div className="role-icon-box">{r.icon}</div>
+                    <div className="role-card-title">{r.title}</div>
+                    <div className="role-card-desc">{r.desc}</div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Full Name */}
+            <div className="input-field-group">
+              <span className="input-icon-left"><UserIcon /></span>
               <input
                 id="reg-fullname"
                 name="fullName"
@@ -209,15 +299,16 @@ export default function RegisterPage() {
                 value={form.fullName}
                 onChange={handleChange}
                 onBlur={handleBlur}
-                placeholder="Jane Doe"
-                className={`form-input${nameErr ? ' input-error' : ''}`}
+                placeholder="Full Name"
+                className={`neon-input${nameErr ? ' input-error' : ''}`}
                 required
               />
-              {nameErr && <span className="field-error">⚠ {nameErr}</span>}
+              {nameErr && <span className="field-error" style={{ fontSize: '12px', color: '#ef4444', marginTop: '4px', display: 'block' }}>⚠ {nameErr}</span>}
             </div>
 
-            <div className="form-group">
-              <label className="form-label" htmlFor="reg-email">Email</label>
+            {/* Email */}
+            <div className="input-field-group">
+              <span className="input-icon-left"><MailIcon /></span>
               <input
                 id="reg-email"
                 name="email"
@@ -226,106 +317,71 @@ export default function RegisterPage() {
                 value={form.email}
                 onChange={handleChange}
                 onBlur={handleBlur}
-                placeholder="you@example.com"
-                className={`form-input${emailErr ? ' input-error' : ''}`}
+                placeholder="Email Address"
+                className={`neon-input${emailErr ? ' input-error' : ''}`}
                 required
               />
-              {emailErr && <span className="field-error">⚠ {emailErr}</span>}
+              {emailErr && <span className="field-error" style={{ fontSize: '12px', color: '#ef4444', marginTop: '4px', display: 'block' }}>⚠ {emailErr}</span>}
             </div>
 
-            <div className="form-group">
-              <label className="form-label" htmlFor="reg-password">Password</label>
-              <div className="form-input-wrapper">
-                <input
-                  id="reg-password"
-                  name="password"
-                  type={showPw ? 'text' : 'password'}
-                  autoComplete="new-password"
-                  value={form.password}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  placeholder="••••••••"
-                  className="form-input"
-                  required
-                />
-                <button type="button" className="input-icon" onClick={() => setShowPw(!showPw)}>
-                  <EyeIcon open={showPw} />
-                </button>
-              </div>
+            {/* Password */}
+            <div className="input-field-group">
+              <span className="input-icon-left"><LockIcon /></span>
+              <input
+                id="reg-password"
+                name="password"
+                type={showPw ? 'text' : 'password'}
+                autoComplete="new-password"
+                value={form.password}
+                onChange={handleChange}
+                onBlur={handleBlur}
+                placeholder="Password"
+                className="neon-input"
+                required
+              />
+              <button type="button" className="input-icon-right" onClick={() => setShowPw(!showPw)}>
+                <EyeIcon open={showPw} />
+              </button>
               <PasswordStrength password={form.password} />
             </div>
 
-            <div className="form-group">
-              <label className="form-label" htmlFor="reg-confirm">Confirm password</label>
-              <div className="form-input-wrapper">
-                <input
-                  id="reg-confirm"
-                  name="confirmPassword"
-                  type={showCpw ? 'text' : 'password'}
-                  autoComplete="new-password"
-                  value={form.confirmPassword}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  placeholder="••••••••"
-                  className={`form-input${cpwErr ? ' input-error' : ''}`}
-                  required
-                />
-                <button type="button" className="input-icon" onClick={() => setShowCpw(!showCpw)}>
-                  <EyeIcon open={showCpw} />
-                </button>
-              </div>
-              {cpwErr && <span className="field-error">⚠ {cpwErr}</span>}
+            {/* Confirm Password */}
+            <div className="input-field-group">
+              <span className="input-icon-left"><LockIcon /></span>
+              <input
+                id="reg-confirm"
+                name="confirmPassword"
+                type={showCpw ? 'text' : 'password'}
+                autoComplete="new-password"
+                value={form.confirmPassword}
+                onChange={handleChange}
+                onBlur={handleBlur}
+                placeholder="Confirm Password"
+                className={`neon-input${cpwErr ? ' input-error' : ''}`}
+                required
+              />
+              <button type="button" className="input-icon-right" onClick={() => setShowCpw(!showCpw)}>
+                <EyeIcon open={showCpw} />
+              </button>
+              {cpwErr && <span className="field-error" style={{ fontSize: '12px', color: '#ef4444', marginTop: '4px', display: 'block' }}>⚠ {cpwErr}</span>}
             </div>
 
-            <div className="form-group">
-              <label className="form-label">What best describes you?</label>
-              <div className="role-selector-grid">
-                {publicRoles.map((r) => {
-                  const isSelected = form.role === r.id
-                  return (
-                    <div
-                      key={r.id}
-                      className={`role-option-card ${isSelected ? 'selected' : ''}`}
-                      onClick={() => handleRoleSelect(r.id)}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleRoleSelect(r.id) }}
-                    >
-                      <div className="role-option-header">
-                        <span className="role-option-icon">{r.icon}</span>
-                        <span className="role-option-title">{r.title}</span>
-                        <span className={`role-radio ${isSelected ? 'checked' : ''}`} />
-                      </div>
-                      <p className="role-option-desc">{r.desc}</p>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-
+            {/* Submit button */}
             <button
               id="register-submit"
               type="submit"
-              className="btn btn-primary btn-full btn-lg"
-              disabled={loading}
+              className="btn-neon-primary"
+              disabled={loading || !!success}
             >
-              {loading ? <><span className="spinner" /> Creating account…</> : 'Create account →'}
+              {loading ? 'Creating Account…' : 'Create Account →'}
             </button>
-
-            <p className="auth-terms">
-              By creating an account you agree to our{' '}
-              <a href="#" onClick={(e) => e.preventDefault()}>Terms of Service</a> and{' '}
-              <a href="#" onClick={(e) => e.preventDefault()}>Privacy Policy</a>.
-            </p>
           </form>
 
-          <div className="divider">already have an account?</div>
-
-          <p className="auth-switch">
-            <Link to="/login" className="auth-link">Sign in →</Link>
-          </p>
+          <div className="neon-card-footer">
+            Already have an account? <Link to="/login" className="neon-link">Login</Link>
+          </div>
         </div>
-      </div>
+      </main>
     </div>
   )
 }

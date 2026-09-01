@@ -32,7 +32,7 @@ All authoritative data lives in PostgreSQL (SQLAlchemy models).
 
 import logging
 from typing import Optional
-
+# pyrefly: ignore [missing-import]
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 
 from app.core.config import settings

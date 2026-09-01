@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     # Stored as a comma-separated string in .env; parsed into a list here.
     ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
 
+    # --- Google OAuth (Sign in & Linking) ---
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/google/callback"
+
     # --- Social platform OAuth credentials (filled when approved) ---
     FACEBOOK_CLIENT_ID: str = ""
     FACEBOOK_CLIENT_SECRET: str = ""

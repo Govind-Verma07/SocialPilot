@@ -173,6 +173,10 @@ async def oauth_callback(
         params = urlencode({"error": "Missing code or state parameter in OAuth callback.", "platform": platform})
         return RedirectResponse(f"{frontend_base}/accounts?{params}")
 
+    if platform == "google":
+        from app.api.v1.endpoints.auth import google_oauth_callback
+        return await google_oauth_callback(request, code, state, error, error_description, db)
+
     # Validate state token
     state_payload = _decode_oauth_state(state)
     user_id = state_payload.get("sub")

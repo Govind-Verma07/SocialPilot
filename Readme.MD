@@ -3,6 +3,9 @@ backend:- .venv\Scripts\activate uvicorn app.main:app --reload
 
 fronten:- npm run dev
 
+## google OAuth:-- https://console.cloud.google.com/auth/clients?project=socialpilot-507310
+## http://localhost:8000/api/v1/social/oauth/google/callback
+
 
 SocialPilot is a social media workspace platform built with FastAPI, React, PostgreSQL (Supabase), and MongoDB.
 

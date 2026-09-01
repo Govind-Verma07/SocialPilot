@@ -1,6 +1,5 @@
 /**
  * src/pages/DashboardPage.jsx
- * ----------------------------
  * Milestone 1 Dashboard Overview.
  * Shows user profile, active social integrations status, quick stats,
  * and workspace navigation.
@@ -10,8 +9,23 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Sidebar from '../components/Sidebar'
+import Navbar from '../components/Navbar'
+import Button from '../components/ui/Button'
+import GlowCard from '../components/ui/GlowCard'
+import StatusBadge from '../components/ui/StatusBadge'
+import LoadingState from '../components/ui/LoadingState'
+import EmptyState from '../components/ui/EmptyState'
 import { socialApi } from '../api/socialApi'
 import './DashboardPage.css'
+
+const PLATFORM_ICONS = {
+  facebook:  '📘',
+  instagram: '📸',
+  linkedin:  '💼',
+  x:         '𝕏',
+  youtube:   '▶️',
+  pinterest: '📌',
+}
 
 export default function DashboardPage() {
   const { user } = useAuth()
@@ -35,20 +49,20 @@ export default function DashboardPage() {
   }, [])
 
   const initials = user?.full_name
-    ? user.full_name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+    ? user.full_name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
     : 'U'
 
   const formattedRole = (user?.role || 'content_creator')
     .split('_')
-    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ')
 
   const joinDate = user?.created_at
     ? new Date(user.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
     : '—'
 
-  const connectedCount = accounts.filter(a => a.status === 'connected').length
-  const platformList = accounts.map(a => a.platform).join(', ') || 'None connected'
+  const connectedCount = accounts.filter((a) => a.status === 'connected').length
+  const platformList = accounts.map((a) => a.platform).join(', ') || 'None connected'
 
   const stats = [
     {
@@ -59,60 +73,70 @@ export default function DashboardPage() {
       up: connectedCount > 0 ? true : null,
     },
     {
-      label: 'Assigned Role',
-      value: formattedRole,
-      icon: '🛡️',
-      delta: 'RBAC Active',
+      label: 'Scheduled Posts Queue',
+      value: '3 Pending',
+      icon: '📝',
+      delta: 'Next post in 2h',
       up: true,
     },
     {
-      label: 'Workspace Security',
-      value: 'AES-256',
-      icon: '🔐',
-      delta: 'Tokens Encrypted',
+      label: 'Active Campaigns',
+      value: '2 Active',
+      icon: '🎯',
+      delta: '+240% Target ROI',
       up: true,
     },
     {
-      label: 'Metadata Store',
-      value: 'Hybrid',
-      icon: '⚡',
-      delta: 'PostgreSQL + MongoDB',
+      label: 'Total Impressions & Reach',
+      value: '184.5K',
+      icon: '📊',
+      delta: '▲ +18.4% this month',
       up: true,
     },
   ]
 
-  return (
-    <div className="dashboard">
-      <div className="orb orb-1" />
-      <div className="orb orb-2" />
+  const greeting = getGreeting()
 
-      {/* Shared Responsive Sidebar */}
+  return (
+    <div className="dashboard body-bg">
       <Sidebar mobileOpen={mobileNav} onCloseMobile={() => setMobileNav(false)} />
 
-      {/* Main Content */}
       <main className="dashboard-main">
-        {/* Header */}
-        <div className="dashboard-header">
-          <div>
-            <h1 className="dashboard-greeting">
-              Good {getGreeting()},{' '}
-              <span className="gradient-text">{user?.full_name?.split(' ')[0] ?? 'there'}</span> 👋
-            </h1>
-            <p className="dashboard-subtitle">
-              Welcome to your SocialPilot management workspace.
-            </p>
-          </div>
-          <div className="header-actions">
-            <Link to="/accounts" className="btn btn-primary">
-              + Connect Social Account
-            </Link>
-          </div>
+        <Navbar
+          pageTitle="Dashboard Overview"
+          pageSubtitle="Centralized Social Media Scheduler & Campaign Management Platform"
+          mobileMenuLabel="Open menu"
+          onMobileMenu={() => setMobileNav(true)}
+        />
+
+        {/* Greeting */}
+        <div className="dashboard-greeting-section">
+          <h1 className="dashboard-greeting">
+            Good {greeting},{' '}
+            <span className="gradient-text">{user?.full_name?.split(' ')[0] ?? 'there'}</span> 👋
+          </h1>
+          <p className="dashboard-subtitle">
+            Welcome to your SocialPilot multi-platform publishing and campaign workspace.
+          </p>
+        </div>
+
+        {/* Quick action bar */}
+        <div className="dashboard-quick-action" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          <Button variant="primary" onClick={() => navigate('/posts')}>
+            + Compose & Schedule Post 📝
+          </Button>
+          <Button variant="outline" onClick={() => navigate('/campaigns')}>
+            + Launch New Campaign 🎯
+          </Button>
+          <Button variant="ghost" onClick={() => navigate('/accounts')}>
+            + Connect Social Channel 🔗
+          </Button>
         </div>
 
         {/* Stats grid */}
         <div className="stats-grid">
           {stats.map((s) => (
-            <div key={s.label} className="stat-card glass-card">
+            <GlowCard key={s.label} className="stat-card" hover>
               <div className="stat-top">
                 <span className="stat-icon">{s.icon}</span>
                 <span
@@ -125,14 +149,14 @@ export default function DashboardPage() {
               </div>
               <div className="stat-value">{s.value}</div>
               <div className="stat-label">{s.label}</div>
-            </div>
+            </GlowCard>
           ))}
         </div>
 
-        {/* Two-column lower section */}
+        {/* Lower section */}
         <div className="dashboard-lower">
           {/* Social Accounts Quick Overview */}
-          <div className="dashboard-section glass-card">
+          <GlowCard className="dashboard-section" hover>
             <div className="section-title-row">
               <h2 className="ds-title">Connected Social Channels</h2>
               <Link to="/accounts" className="btn btn-ghost btn-sm">
@@ -141,60 +165,41 @@ export default function DashboardPage() {
             </div>
 
             {loading ? (
-              <p style={{ color: '#94a3b8', padding: '16px 0' }}>Loading social accounts…</p>
+              <LoadingState message="Loading social accounts…" size="sm" />
             ) : accounts.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '32px 16px', color: '#94a3b8' }}>
-                <p style={{ fontSize: '1.2rem', marginBottom: '8px' }}>No accounts connected yet.</p>
-                <p style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: '16px' }}>
-                  Connect your Facebook, Instagram, LinkedIn, X, YouTube, or Pinterest accounts to get started.
-                </p>
-                <button
-                  onClick={() => navigate('/accounts')}
-                  className="btn btn-outline"
-                >
-                  Connect Your First Account
-                </button>
-              </div>
+              <EmptyState
+                icon="🔗"
+                title="No accounts connected yet."
+                description="Connect your Facebook, Instagram, LinkedIn, X, YouTube, or Pinterest accounts to get started."
+                actionLabel="Connect Your First Account"
+                onAction={() => navigate('/accounts')}
+                size="md"
+              />
             ) : (
               <div className="posts-list">
-                {accounts.map((acc) => (
-                  <div key={acc.id} className="post-item" style={{ alignItems: 'center', display: 'flex', justifyContent: 'space-between' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <span style={{ fontSize: '1.5rem' }}>
-                        {acc.platform === 'facebook' ? '📘' :
-                         acc.platform === 'instagram' ? '📸' :
-                         acc.platform === 'linkedin' ? '💼' :
-                         acc.platform === 'x' ? '𝕏' :
-                         acc.platform === 'youtube' ? '▶️' :
-                         acc.platform === 'pinterest' ? '📌' : '🔗'}
-                      </span>
-                      <div>
-                        <div style={{ fontWeight: 600, color: '#f1f5f9' }}>{acc.account_name}</div>
-                        <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                          {acc.account_username ? `@${acc.account_username}` : acc.platform}
+                {accounts.map((acc) => {
+                  const Icon = PLATFORM_ICONS[acc.platform] || '🔗'
+                  return (
+                    <div key={acc.id} className="account-quick-row">
+                      <div className="account-quick-left">
+                        <span className="account-quick-icon">{Icon}</span>
+                        <div className="account-quick-info">
+                          <span className="account-quick-name">{acc.account_name}</span>
+                          <span className="account-quick-username">
+                            {acc.account_username ? `@${acc.account_username}` : acc.platform}
+                          </span>
                         </div>
                       </div>
+                      <StatusBadge status={acc.status === 'connected' ? 'success' : 'error'} label={acc.status} showDot />
                     </div>
-                    <div>
-                      <span
-                        className="post-status"
-                        style={{
-                          background: acc.status === 'connected' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                          color: acc.status === 'connected' ? '#10b981' : '#ef4444',
-                          border: `1px solid ${acc.status === 'connected' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
-                        }}
-                      >
-                        {acc.status}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
-          </div>
+          </GlowCard>
 
           {/* Profile Card */}
-          <div className="dashboard-section glass-card">
+          <GlowCard className="dashboard-section profile-card" hover>
             <div className="section-title-row">
               <h2 className="ds-title">Your Profile</h2>
               <Link to="/profile" className="btn btn-ghost btn-sm">
@@ -219,11 +224,15 @@ export default function DashboardPage() {
                   <span className="meta-value status-active">● Active</span>
                 </div>
               </div>
-              <Link to="/team" className="btn btn-outline btn-full" style={{ marginTop: '16px', display: 'block', textAlign: 'center' }}>
+              <Link
+                to="/team"
+                className="btn btn-outline btn-full"
+                style={{ marginTop: '16px', display: 'block', textAlign: 'center' }}
+              >
                 Manage Team Members 👥
               </Link>
             </div>
-          </div>
+          </GlowCard>
         </div>
       </main>
     </div>

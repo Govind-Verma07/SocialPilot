@@ -1,4 +1,4 @@
-/* TeamPage.css */
+/* TeamPage.css — team-specific styles (shared layout in index.css) */
 
 .team-content {
   display: flex;
@@ -23,7 +23,7 @@
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.2s;
+  transition: all var(--dur-normal) var(--ease-default);
 }
 
 .team-tab-btn:hover {
@@ -85,35 +85,6 @@
   margin-top: 2px;
 }
 
-.empty-team-card {
-  padding: 64px 32px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  max-width: 540px;
-  margin: 40px auto;
-}
-
-.empty-icon {
-  font-size: 54px;
-  margin-bottom: 16px;
-}
-
-.empty-title {
-  font-size: 22px;
-  font-weight: 700;
-  margin-bottom: 8px;
-}
-
-.empty-desc {
-  font-size: 14px;
-  color: var(--clr-text-secondary);
-  line-height: 1.6;
-  margin-bottom: 24px;
-}
-
-/* Members Table */
 .members-card {
   padding: 28px;
 }
@@ -245,6 +216,7 @@
 .remove-member-btn {
   color: #f87171;
 }
+
 .remove-member-btn:hover {
   background: rgba(239, 68, 68, 0.15);
   color: #ef4444;
@@ -295,4 +267,12 @@
   justify-content: flex-end;
   gap: 12px;
   margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }

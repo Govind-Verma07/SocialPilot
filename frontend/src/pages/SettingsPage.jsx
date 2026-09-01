@@ -1,6 +1,5 @@
 /**
  * src/pages/SettingsPage.jsx
- * --------------------------
  * User Settings page: preferences, notifications, timezone, and account actions.
  */
 
@@ -9,6 +8,11 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { authApi } from '../api/authApi'
 import Sidebar from '../components/Sidebar'
+import Navbar from '../components/Navbar'
+import Button from '../components/ui/Button'
+import GlowCard from '../components/ui/GlowCard'
+import LoadingState from '../components/ui/LoadingState'
+import ErrorMessage from '../components/ui/ErrorMessage'
 import './SettingsPage.css'
 
 const TIMEZONES = [
@@ -78,43 +82,32 @@ export default function SettingsPage() {
 
   const handleLogout = async () => {
     await logout()
-    navigate('/login')
+    navigate('/login', { replace: true })
   }
 
   const formattedRole = (user?.role || 'content_creator')
     .split('_')
-    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ')
 
   return (
-    <div className="app-layout">
-      <div className="orb orb-1" />
-      <div className="orb orb-2" />
-
+    <div className="app-layout body-bg">
       <Sidebar mobileOpen={mobileNav} onCloseMobile={() => setMobileNav(false)} />
 
       <main className="app-main">
-        {/* Header */}
-        <header className="page-header">
-          <div className="header-left">
-            <button className="mobile-toggle" onClick={() => setMobileNav(true)} aria-label="Open menu">
-              ☰
-            </button>
-            <div>
-              <h1 className="page-title">Settings</h1>
-              <p className="page-subtitle">Configure application preferences and notification controls.</p>
-            </div>
-          </div>
-        </header>
+        <Navbar
+          pageTitle="Settings"
+          pageSubtitle="Configure application preferences and notification controls."
+          mobileMenuLabel="Open menu"
+          onMobileMenu={() => setMobileNav(true)}
+        />
 
         {loading ? (
-          <div className="glass-card loading-card">
-            <span className="spinner" /> Loading preferences…
-          </div>
+          <LoadingState message="Loading preferences…" size="lg" />
         ) : (
           <div className="settings-container">
             {/* Preferences Form */}
-            <div className="glass-card settings-card">
+            <GlowCard className="settings-card" hover={false}>
               <h3 className="section-heading">Preferences</h3>
               <p className="section-subheading">Manage your timezone and alerts.</p>
 
@@ -125,12 +118,7 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              {errorMsg && (
-                <div className="alert alert-error" role="alert">
-                  <span>⚠️</span>
-                  <span>{errorMsg}</span>
-                </div>
-              )}
+              {errorMsg && <ErrorMessage message={errorMsg} />}
 
               <form onSubmit={handleSave} className="settings-form">
                 <div className="form-group">
@@ -172,15 +160,15 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="form-actions">
-                  <button type="submit" className="btn btn-primary" disabled={saving}>
+                  <Button type="submit" variant="primary" size="md" loading={saving} disabled={saving}>
                     {saving ? 'Saving…' : 'Save Preferences'}
-                  </button>
+                  </Button>
                 </div>
               </form>
-            </div>
+            </GlowCard>
 
             {/* Account Info & Security */}
-            <div className="glass-card settings-card">
+            <GlowCard className="settings-card" hover={false}>
               <h3 className="section-heading">Account & Security</h3>
               <p className="section-subheading">Account identity and session controls.</p>
 
@@ -204,11 +192,11 @@ export default function SettingsPage() {
                   <span className="danger-title">Sign out of SocialPilot</span>
                   <span className="danger-desc">End your active session on this browser.</span>
                 </div>
-                <button type="button" className="btn btn-outline danger-btn" onClick={handleLogout}>
+                <Button variant="outline" size="md" onClick={handleLogout}>
                   Sign Out
-                </button>
+                </Button>
               </div>
-            </div>
+            </GlowCard>
           </div>
         )}
       </main>
