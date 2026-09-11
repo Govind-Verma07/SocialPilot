@@ -1,0 +1,101 @@
+/* CampaignsPage.css — Styling for Campaign Management & Performance Tracking Module */
+
+.campaigns-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.campaigns-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.campaigns-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 20px;
+}
+
+.campaign-card {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.campaign-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.campaign-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--clr-text-primary);
+}
+
+.campaign-platform-badge {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  background: rgba(124, 58, 237, 0.15);
+  border: 1px solid rgba(124, 58, 237, 0.3);
+  color: #c084fc;
+}
+
+.campaign-details-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.campaign-detail-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.campaign-detail-lbl {
+  color: var(--clr-text-muted);
+}
+
+.campaign-detail-val {
+  font-weight: 600;
+  color: var(--clr-text-primary);
+}
+
+.campaign-metrics-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  text-align: center;
+}
+
+.campaign-metric-box {
+  background: rgba(255, 255, 255, 0.03);
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+}
+
+.metric-num {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--clr-accent-3);
+}
+
+.metric-txt {
+  font-size: 10px;
+  color: var(--clr-text-muted);
+  text-transform: uppercase;
+}

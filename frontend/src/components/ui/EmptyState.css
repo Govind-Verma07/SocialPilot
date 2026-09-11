@@ -1,0 +1,31 @@
+/* EmptyState.css */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.empty-state.size-sm { padding: 32px 16px; }
+.empty-state.size-md { padding: 64px 24px; }
+.empty-state.size-lg { padding: 80px 32px; }
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.6;
+}
+
+.empty-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.empty-desc {
+  font-size: 13px;
+  color: var(--clr-text-secondary);
+  line-height: 1.6;
+  max-width: 400px;
+}

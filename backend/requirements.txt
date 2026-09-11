@@ -1,0 +1,41 @@
+# ============================================================
+# SocialPilot Backend — Python Dependencies
+# Milestone 1: Authentication + Account Management Foundation
+# ============================================================
+
+# --- Web Framework ---
+fastapi==0.111.1
+uvicorn[standard]==0.30.1
+
+# --- Database (PostgreSQL) ---
+sqlalchemy==2.0.31
+alembic==1.13.2
+asyncpg==0.29.0          # async PostgreSQL driver
+psycopg2-binary==2.9.9   # sync PostgreSQL driver (for Alembic + sync engine)
+
+# --- Database (MongoDB Atlas) ---
+motor==3.4.0              # async MongoDB driver (Motor wraps pymongo)
+pymongo==4.7.3            # sync MongoDB driver (Motor dependency)
+
+# --- Authentication ---
+python-jose[cryptography]==3.3.0   # JWT
+passlib[bcrypt]==1.7.4             # password hashing (bcrypt)
+
+# --- Validation / Settings ---
+pydantic==2.8.2
+pydantic-settings==2.3.4
+python-multipart==0.0.9   # form data support (login form)
+email-validator==2.2.0    # email validation in Pydantic
+
+# --- Security (token encryption at rest) ---
+cryptography==42.0.8      # Fernet symmetric encryption for stored OAuth tokens
+
+# --- Environment ---
+python-dotenv==1.0.1
+
+# --- HTTP Client (OAuth callbacks / platform API calls) ---
+httpx==0.27.0
+
+# --- Testing ---
+pytest==8.2.2
+pytest-asyncio==0.23.7

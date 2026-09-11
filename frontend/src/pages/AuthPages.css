@@ -1,0 +1,561 @@
+/* AuthPages.css — Cyberpunk Neon Theme for SocialPilot Auth */
+
+.auth-page {
+  min-height: 100vh;
+  width: 100%;
+  background: #060714;
+  background-image: 
+    radial-gradient(circle at 50% 10%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
+    radial-gradient(circle at 10% 80%, rgba(168, 85, 247, 0.12) 0%, transparent 40%),
+    radial-gradient(circle at 90% 80%, rgba(59, 130, 246, 0.12) 0%, transparent 40%);
+  color: #f1f5f9;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 24px 60px;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* ── Top Header Navigation ────────────────────────────────── */
+.auth-nav-header {
+  width: 100%;
+  max-width: 1300px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 0;
+  margin-bottom: 20px;
+  z-index: 10;
+}
+
+.auth-brand-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+}
+
+.brand-icon-orb {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #a855f7 0%, #3b82f6 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  box-shadow: 0 0 16px rgba(168, 85, 247, 0.5);
+}
+
+.brand-logo-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.brand-title {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #ffffff;
+  font-family: var(--font-heading);
+}
+
+.brand-tagline {
+  font-size: 11px;
+  color: #94a3b8;
+  letter-spacing: 0.05em;
+}
+
+.auth-nav-links {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.auth-nav-link {
+  color: #94a3b8;
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.auth-nav-link:hover {
+  color: #ffffff;
+}
+
+.auth-header-badges {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.auth-header-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #e2e8f0;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 0 10px rgba(139, 92, 246, 0.1);
+}
+
+/* ── Hero Title Header ───────────────────────────────────── */
+.auth-hero-section {
+  text-align: center;
+  margin: 10px 0 36px;
+  z-index: 5;
+}
+
+.auth-hero-title {
+  font-size: 44px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  background: linear-gradient(135deg, #a855f7 0%, #60a5fa 50%, #38bdf8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-transform: uppercase;
+  font-family: var(--font-heading);
+  text-shadow: 0 0 30px rgba(168, 85, 247, 0.4);
+}
+
+.auth-hero-subtitle {
+  font-size: 16px;
+  color: #94a3b8;
+  margin-top: 6px;
+  font-weight: 500;
+}
+
+.auth-hero-line {
+  width: 80px;
+  height: 4px;
+  background: linear-gradient(90deg, #a855f7, #3b82f6);
+  border-radius: 2px;
+  margin: 14px auto 0;
+  box-shadow: 0 0 10px #a855f7;
+}
+
+/* ── Main Auth Container (Twin / Focused Panels) ───────────── */
+.auth-main-container {
+  width: 100%;
+  max-width: 1200px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 32px;
+  z-index: 5;
+}
+
+.auth-single-center {
+  max-width: 580px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* ── Neon Frame Card ──────────────────────────────────────── */
+.neon-card {
+  position: relative;
+  background: rgba(10, 12, 30, 0.85);
+  border: 1.5px solid rgba(139, 92, 246, 0.45);
+  border-radius: 24px;
+  padding: 36px 32px;
+  backdrop-filter: blur(20px);
+  box-shadow: 
+    0 0 35px rgba(139, 92, 246, 0.2),
+    inset 0 0 20px rgba(139, 92, 246, 0.05);
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.neon-card:hover {
+  border-color: rgba(168, 85, 247, 0.7);
+  box-shadow: 
+    0 0 45px rgba(168, 85, 247, 0.3),
+    inset 0 0 25px rgba(168, 85, 247, 0.08);
+}
+
+/* Futuristic corner accent cuts */
+.neon-card::before {
+  content: '';
+  position: absolute;
+  top: -2px; left: 30px; right: 30px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #a855f7, #3b82f6, transparent);
+}
+
+.neon-card-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.neon-card-title {
+  font-size: 26px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #c084fc 0%, #60a5fa 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-family: var(--font-heading);
+}
+
+.neon-card-subtitle {
+  font-size: 14px;
+  color: #94a3b8;
+  margin-top: 4px;
+}
+
+/* ── Role Selector Toggle (User vs Admin) ────────────────── */
+.role-toggle-container {
+  display: flex;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: 14px;
+  padding: 4px;
+  margin-bottom: 24px;
+  position: relative;
+}
+
+.role-toggle-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #94a3b8;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.role-toggle-btn.active {
+  background: linear-gradient(135deg, #6366f1 0%, #3b82f6 100%);
+  color: #ffffff;
+  box-shadow: 0 0 16px rgba(99, 102, 241, 0.5);
+}
+
+/* ── Public Role Selection Cards (3 Roles) ────────────────── */
+.roles-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.role-card-neon {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1.5px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.25s ease;
+}
+
+.role-card-neon:hover {
+  border-color: rgba(168, 85, 247, 0.4);
+  background: rgba(168, 85, 247, 0.05);
+}
+
+.role-card-neon.selected {
+  border-color: #a855f7;
+  background: rgba(168, 85, 247, 0.12);
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.3);
+}
+
+.role-icon-box {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(168, 85, 247, 0.15);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  margin-bottom: 10px;
+  color: #c084fc;
+}
+
+.role-card-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin-bottom: 4px;
+}
+
+.role-card-desc {
+  font-size: 11px;
+  color: #94a3b8;
+  line-height: 1.3;
+}
+
+.role-check-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: transparent;
+  transition: all 0.2s;
+}
+
+.role-card-neon.selected .role-check-badge {
+  background: #3b82f6;
+  border-color: #60a5fa;
+  color: #ffffff;
+  box-shadow: 0 0 8px #3b82f6;
+}
+
+/* ── Form Group & Inputs ──────────────────────────────────── */
+.neon-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.input-field-group {
+  position: relative;
+}
+
+.input-icon-left {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  transition: color 0.2s;
+}
+
+.neon-input {
+  width: 100%;
+  padding: 13px 16px 13px 44px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  border-radius: 12px;
+  color: #f8fafc;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.neon-input::placeholder {
+  color: #64748b;
+}
+
+.neon-input:focus {
+  border-color: #a855f7;
+  box-shadow: 0 0 14px rgba(168, 85, 247, 0.3);
+  background: rgba(15, 23, 42, 0.95);
+}
+
+.input-field-group:focus-within .input-icon-left {
+  color: #c084fc;
+}
+
+.input-icon-right {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: color 0.2s;
+}
+
+.input-icon-right:hover {
+  color: #c084fc;
+}
+
+.form-options-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.remember-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.remember-checkbox input {
+  accent-color: #a855f7;
+  width: 16px;
+  height: 16px;
+}
+
+.forgot-link {
+  color: #a855f7;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+.forgot-link:hover {
+  color: #c084fc;
+  text-decoration: underline;
+}
+
+/* ── Neon Buttons ─────────────────────────────────────────── */
+.btn-neon-primary {
+  width: 100%;
+  padding: 14px;
+  border-radius: 14px;
+  border: none;
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #2563eb 100%);
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  box-shadow: 0 0 20px rgba(124, 58, 237, 0.4);
+  transition: all 0.25s ease;
+  margin-top: 4px;
+}
+
+.btn-neon-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 30px rgba(168, 85, 247, 0.6);
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #3b82f6 100%);
+}
+
+.btn-neon-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.neon-divider {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 16px 0;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.neon-divider::before,
+.neon-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(139, 92, 246, 0.2);
+}
+
+.btn-google-login {
+  width: 100%;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  color: #f1f5f9;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: all 0.2s ease;
+}
+
+.btn-google-login:hover {
+  border-color: rgba(168, 85, 247, 0.5);
+  background: rgba(30, 41, 59, 0.9);
+}
+
+.neon-card-footer {
+  text-align: center;
+  margin-top: 20px;
+  font-size: 14px;
+  color: #94a3b8;
+}
+
+.neon-link {
+  color: #c084fc;
+  font-weight: 600;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.neon-link:hover {
+  color: #e9d5ff;
+  text-decoration: underline;
+}
+
+/* Alerts */
+.alert-neon-error {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.alert-neon-success {
+  background: rgba(16, 185, 129, 0.18);
+  border: 1.5px solid rgba(16, 185, 129, 0.5);
+  color: #6ee7b7;
+  padding: 14px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.2);
+}
+
+/* ── Responsive adjustments ────────────────────────────────── */
+@media (max-width: 900px) {
+  .auth-nav-links, .auth-header-badges {
+    display: none;
+  }
+  .roles-grid-3 {
+    grid-template-columns: 1fr;
+  }
+  .auth-hero-title {
+    font-size: 32px;
+  }
+}

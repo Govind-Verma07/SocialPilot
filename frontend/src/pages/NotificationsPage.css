@@ -1,0 +1,81 @@
+/* NotificationsPage.css — Styling for Notification & Operations Module */
+
+.notifs-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.notifs-filter-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.notif-filter-chip {
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--clr-text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.notif-filter-chip.active {
+  background: var(--grad-accent);
+  color: #fff;
+  border-color: transparent;
+}
+
+.notifs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.notif-card {
+  padding: 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.notif-icon-box {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: rgba(124, 58, 237, 0.15);
+  border: 1px solid rgba(124, 58, 237, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.notif-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.notif-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--clr-text-primary);
+}
+
+.notif-desc {
+  font-size: 13px;
+  color: var(--clr-text-secondary);
+}
+
+.notif-time {
+  font-size: 11px;
+  color: var(--clr-text-muted);
+}

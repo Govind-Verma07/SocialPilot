@@ -1,0 +1,205 @@
+/* DashboardPage.css — dashboard specific components */
+
+/* ── Greeting ── */
+.dashboard-greeting-section {
+  margin-bottom: 8px;
+}
+
+.dashboard-greeting {
+  font-size: clamp(22px, 3vw, 28px);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.dashboard-subtitle {
+  font-size: 14px;
+  color: var(--clr-text-muted);
+  margin-top: 4px;
+}
+
+/* ── Quick action ── */
+.dashboard-quick-action {
+  margin: 8px 0;
+}
+
+/* ── Stats ── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.stat-card {
+  padding: 24px;
+}
+
+.stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.5),
+    0 0 30px rgba(124, 58, 237, 0.2);
+}
+
+.stat-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.stat-icon {
+  font-size: 24px;
+}
+
+.stat-delta {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 9999px;
+}
+
+.stat-delta.up     { background: rgba(16,185,129,0.12); color: #10b981; }
+.stat-delta.down   { background: rgba(239,68,68,0.12);  color: #ef4444; }
+.stat-delta.neutral{ background: rgba(90,100,144,0.15); color: var(--clr-text-muted); font-size: 10px; }
+
+.stat-value {
+  font-family: var(--font-heading);
+  font-size: 32px;
+  font-weight: 800;
+  background: var(--grad-accent);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 4px;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--clr-text-muted);
+}
+
+/* ── Lower section ── */
+.dashboard-lower {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 20px;
+  align-items: start;
+}
+
+.dashboard-section {
+  padding: 28px;
+}
+
+/* ── Account quick row ── */
+.account-quick-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(124, 58, 237, 0.06);
+}
+
+.account-quick-row:last-child {
+  border-bottom: none;
+}
+
+.account-quick-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.account-quick-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.account-quick-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.account-quick-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--clr-text-primary);
+}
+
+.account-quick-username {
+  font-size: 12px;
+  color: var(--clr-text-muted);
+}
+
+/* ── Profile card ── */
+.profile-card-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+}
+
+.profile-avatar-lg {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--grad-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 16px;
+  box-shadow: 0 0 24px rgba(124, 58, 237, 0.3);
+}
+
+.profile-name {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.profile-email {
+  font-size: 13px;
+  color: var(--clr-text-muted);
+  margin-bottom: 8px;
+}
+
+.profile-meta {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.profile-meta-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(124, 58, 237, 0.08);
+}
+
+.meta-label {
+  font-size: 12px;
+  color: var(--clr-text-muted);
+}
+
+.meta-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--clr-text-primary);
+}
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+  .dashboard {
+    padding: 16px;
+  }
+  .dashboard-main {
+    gap: 20px;
+  }
+}
