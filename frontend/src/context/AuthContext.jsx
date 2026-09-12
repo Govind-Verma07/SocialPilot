@@ -44,19 +44,18 @@ export function AuthProvider({ children }) {
     setLoading(true)
     try {
       const { data } = await authApi.register({ full_name: fullName, email, password, role })
-      return { success: true, data }
+      const token = data.access_token ?? data.accessToken ?? data.token
+      const userData = data.user ?? { fullName, email, role }
+      if (token) localStorage.setItem('sp_access_token', token)
+      localStorage.setItem('sp_user', JSON.stringify(userData))
+      setUser(userData)
+      return { success: true }
     } catch (err) {
-      let message = 'Registration failed. Please try again.'
-      const detail = err.response?.data?.detail
-      if (typeof detail === 'string') {
-        message = detail
-      } else if (Array.isArray(detail)) {
-        message = detail.map((d) => d.msg || d.message).join('; ')
-      } else if (err.response?.data?.message) {
-        message = err.response.data.message
-      } else if (err.message) {
-        message = err.message
-      }
+      const message =
+        err.response?.data?.detail ??
+        err.response?.data?.message ??
+        err.response?.data?.error ??
+        'Registration failed. Please try again.'
       return { success: false, message }
     } finally {
       setLoading(false)
@@ -67,24 +66,24 @@ export function AuthProvider({ children }) {
   const login = useCallback(async ({ email, password }) => {
     setLoading(true)
     try {
-      const { data } = await authApi.login({ email, password })
+      const cleanEmail = (email || '').trim().toLowerCase()
+      const { data } = await authApi.login({ email: cleanEmail, password })
       const token = data.access_token ?? data.accessToken ?? data.token
-      const userData = data.user ?? { email }
+      const userData = data.user ?? { email: cleanEmail }
       if (token) localStorage.setItem('sp_access_token', token)
       localStorage.setItem('sp_user', JSON.stringify(userData))
       setUser(userData)
-      return { success: true, user: userData }
+      return { success: true }
     } catch (err) {
       let message = 'Invalid email or password.'
-      const detail = err.response?.data?.detail
-      if (typeof detail === 'string') {
-        message = detail
-      } else if (Array.isArray(detail)) {
-        message = detail.map((d) => d.msg || d.message).join('; ')
+      if (err.response?.data?.detail) {
+        message = err.response.data.detail
       } else if (err.response?.data?.message) {
         message = err.response.data.message
-      } else if (err.message) {
-        message = err.message
+      } else if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+        message = 'Login request timed out. Please check your network and try again.'
+      } else if (err.message?.includes('Network Error') || !err.response) {
+        message = 'Cannot connect to backend server. Please verify the server is running.'
       }
       return { success: false, message }
     } finally {

@@ -13,9 +13,10 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from sqlalchemy import func
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.auth import Token, UserCreate, UserLogin, UserOut
+from app.schemas.auth import Token, UserCreate, UserLogin, UserOut, UserResetPassword
 from app.services.auth_service import (
     create_access_token,
     get_current_user,
@@ -39,11 +40,12 @@ def register(payload: UserCreate, db: Session = Depends(get_db)) -> Token:
     """
     Register a new user.
 
-    - Validates that the email is not already taken.
+    - Validates that the email is not already taken (case-insensitive).
     - Hashes the password with bcrypt.
     - Returns a JWT access token immediately so the user is logged in.
     """
-    existing = db.query(User).filter(User.email == payload.email).first()
+    clean_email = payload.email.strip().lower()
+    existing = db.query(User).filter(func.lower(func.trim(User.email)) == clean_email).first()
     if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -51,8 +53,8 @@ def register(payload: UserCreate, db: Session = Depends(get_db)) -> Token:
         )
 
     user = User(
-        email=payload.email,
-        full_name=payload.full_name,
+        email=clean_email,
+        full_name=payload.full_name.strip(),
         hashed_password=hash_password(payload.password),
         role=payload.role.value if hasattr(payload.role, 'value') else payload.role,
     )
@@ -80,7 +82,12 @@ def login(payload: UserLogin, db: Session = Depends(get_db)) -> Token:
     Returns a JWT on success; 401 on bad credentials (message is intentionally
     vague to avoid user-enumeration attacks).
     """
-    user: User | None = db.query(User).filter(User.email == payload.email).first()
+    clean_email = payload.email.strip().lower()
+    user: User | None = (
+        db.query(User)
+        .filter(func.lower(func.trim(User.email)) == clean_email)
+        .first()
+    )
 
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(
@@ -96,6 +103,33 @@ def login(payload: UserLogin, db: Session = Depends(get_db)) -> Token:
 
     token = create_access_token(subject=user.id)
     return Token(access_token=token, user=UserOut.model_validate(user))
+
+
+# ---------------------------------------------------------------------------
+# Reset Password
+# ---------------------------------------------------------------------------
+@router.post(
+    "/reset-password",
+    status_code=status.HTTP_200_OK,
+    summary="Reset account password",
+)
+def reset_password(payload: UserResetPassword, db: Session = Depends(get_db)) -> dict:
+    """Reset password for an existing account."""
+    clean_email = payload.email.strip().lower()
+    user: User | None = (
+        db.query(User)
+        .filter(func.lower(func.trim(User.email)) == clean_email)
+        .first()
+    )
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No account found with this email address.",
+        )
+
+    user.hashed_password = hash_password(payload.new_password)
+    db.commit()
+    return {"message": "Password updated successfully. You can now log in with your new password."}
 
 
 # ---------------------------------------------------------------------------

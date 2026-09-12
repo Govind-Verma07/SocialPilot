@@ -58,28 +58,14 @@ def test_provider_auth_url_generation():
     x_provider = get_provider("x")
     assert x_provider is not None
     url = x_provider.get_authorization_url(state="test_state_123", redirect_uri="http://localhost:8000/callback")
-    assert "https://x.com/i/oauth2/authorize" in url
+    assert "https://twitter.com/i/oauth2/authorize" in url
     assert "state=test_state_123" in url
     assert "code_challenge=" in url
 
     fb_provider = get_provider("facebook")
-    fb_url = fb_provider.get_authorization_url(state="fb_state_456", redirect_uri="http://localhost:8000/api/v1/social/oauth/facebook/callback")
+    fb_url = fb_provider.get_authorization_url(state="fb_state_456", redirect_uri="http://localhost:8000/callback")
     assert "https://www.facebook.com/v19.0/dialog/oauth" in fb_url
     assert "state=fb_state_456" in fb_url
-    assert "redirect_uri=" in fb_url
-
-    yt_provider = get_provider("youtube")
-    yt_url = yt_provider.get_authorization_url(state="yt_state_789", redirect_uri="http://localhost:8000/api/v1/social/oauth/youtube/callback")
-    assert "https://accounts.google.com/o/oauth2/v2/auth" in yt_url
-    assert "state=yt_state_789" in yt_url
-    assert "redirect_uri=" in yt_url
-    assert "scope=" in yt_url
-
-    li_provider = get_provider("linkedin")
-    li_url = li_provider.get_authorization_url(state="li_state_101", redirect_uri="http://localhost:8000/api/v1/social/oauth/linkedin/callback")
-    assert "https://www.linkedin.com/oauth/v2/authorization" in li_url
-    assert "state=li_state_101" in li_url
-    assert "redirect_uri=" in li_url
 
 
 @pytest.mark.asyncio

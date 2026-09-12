@@ -19,7 +19,6 @@ import NotificationsPage from './pages/NotificationsPage'
 import ProfilePage       from './pages/ProfilePage'
 import SettingsPage      from './pages/SettingsPage'
 import TeamPage          from './pages/TeamPage'
-import PrivacyPolicyPage from './pages/PrivacyPolicyPage'
 
 export default function App() {
   return (
@@ -29,8 +28,6 @@ export default function App() {
           <Route path="/"          element={<LandingPage />} />
           <Route path="/login"     element={<LoginPage />} />
           <Route path="/register"  element={<RegisterPage />} />
-          <Route path="/privacy"   element={<PrivacyPolicyPage />} />
-          <Route path="/policy"    element={<PrivacyPolicyPage />} />
           <Route
             path="/dashboard"
             element={

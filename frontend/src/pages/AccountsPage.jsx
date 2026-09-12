@@ -39,8 +39,24 @@ const DEFAULT_PLATFORMS = [
 export default function AccountsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [platforms, setPlatforms]       = useState(DEFAULT_PLATFORMS)
-  const [accounts, setAccounts]         = useState([])
-  const [loading, setLoading]           = useState(true)
+  
+  // Instant load from sessionStorage cache if available
+  const [accounts, setAccounts]         = useState(() => {
+    try {
+      const cached = sessionStorage.getItem('sp_cached_accounts')
+      return cached ? JSON.parse(cached) : []
+    } catch {
+      return []
+    }
+  })
+  const [loading, setLoading]           = useState(() => {
+    try {
+      const cached = sessionStorage.getItem('sp_cached_accounts')
+      return !cached
+    } catch {
+      return true
+    }
+  })
   const [toasts, setToasts]             = useState([])
   const [mobileNav, setMobileNav]       = useState(false)
   const [syncingId, setSyncingId]       = useState(null)
@@ -62,36 +78,6 @@ export default function AccountsPage() {
     setToasts((prev) => prev.filter((t) => t.id !== id))
   }, [])
 
-  // Load data
-  const loadData = useCallback(async () => {
-    setLoading(true)
-    try {
-      const pPromise = socialApi.getPlatforms()
-        .then((res) => {
-          if (res.data && res.data.length > 0) {
-            setPlatforms(res.data)
-          }
-        })
-        .catch(() => {})
-
-      const aPromise = socialApi.getAccounts()
-        .then((res) => {
-          if (res.data) {
-            setAccounts(res.data)
-          }
-        })
-        .catch(() => {})
-
-      await Promise.all([pPromise, aPromise])
-    } catch {
-      // Keep default platforms for demo capability
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => { loadData() }, [loadData])
-
   // Handle OAuth redirect query params
   useEffect(() => {
     const connected = searchParams.get('connected')
@@ -99,38 +85,42 @@ export default function AccountsPage() {
     if (connected) {
       addToast(`${PLATFORM_META[connected]?.label || connected} connected successfully!`, 'success')
       setSearchParams({})
-      loadData()
     } else if (error) {
       addToast(error, 'error')
       setSearchParams({})
     }
-  }, [searchParams, setSearchParams, addToast, loadData])
+  }, [searchParams, setSearchParams, addToast])
 
-  // Connect platform handler: initiates real OAuth for configured platforms,
-  // falls back to step-by-step modal for unconfigured platforms.
-  const handleConnectPlatform = async (platformObj) => {
-    if (!platformObj.is_configured) {
-      handleOpenConnectModal(platformObj)
-      return
-    }
+  // Load data asynchronously without locking the UI
+  const loadData = useCallback(async () => {
+    // 1. Fetch platforms in background (DEFAULT_PLATFORMS already available)
+    socialApi.getPlatforms()
+      .then((res) => {
+        if (res.data && res.data.length > 0) {
+          setPlatforms(res.data)
+        }
+      })
+      .catch(() => {})
 
+    // 2. Fetch fresh accounts
     try {
-      const res = await socialApi.getAuthorizeUrl(platformObj.platform)
-      if (res.data?.authorization_url) {
-        window.location.href = res.data.authorization_url
-        return
-      }
-      if (res.data && !res.data.is_configured) {
-        handleOpenConnectModal(platformObj)
-        return
+      const accRes = await socialApi.getAccounts()
+      if (accRes.data) {
+        setAccounts(accRes.data)
+        try {
+          sessionStorage.setItem('sp_cached_accounts', JSON.stringify(accRes.data))
+        } catch {}
       }
     } catch (err) {
-      const msg = err.response?.data?.detail || err.message || `Failed to initiate OAuth for ${platformObj.display_name}.`
-      addToast(msg, 'error')
+      console.warn('Could not refresh accounts:', err)
+    } finally {
+      setLoading(false)
     }
-  }
+  }, [])
 
-  // Open Step-by-Step Integration Modal (fallback for unconfigured demo accounts)
+  useEffect(() => { loadData() }, [loadData])
+
+  // Open Step-by-Step Integration Modal
   const handleOpenConnectModal = (platformObj) => {
     setConnectModalPlatform(platformObj)
     setAccountName('')
@@ -139,22 +129,19 @@ export default function AccountsPage() {
     setConnectingProgress(false)
   }
 
-  const [accountToDisconnect, setAccountToDisconnect] = useState(null)
-
   // Handle Dummy Social Integration Submission
   const handleDummyConnectSubmit = (e) => {
     e.preventDefault()
     const cleanUsername = accountUsername.trim().replace(/^@/, '')
     if (!cleanUsername) return
 
-    const platformKey = connectModalPlatform?.platform || 'facebook'
-    // Check for duplicate username on the SAME platform only
+    // 1. Check for Duplicate Username / User ID across connected accounts
     const isDuplicate = accounts.some(
-      (a) => a.platform === platformKey && a.account_username && a.account_username.toLowerCase() === cleanUsername.toLowerCase()
+      (a) => a.account_username && a.account_username.toLowerCase() === cleanUsername.toLowerCase()
     )
 
     if (isDuplicate) {
-      setDuplicateError(`⚠️ Account ID / Username "@${cleanUsername}" is already connected on ${PLATFORM_META[platformKey]?.label || platformKey}! Please enter a different User ID.`)
+      setDuplicateError(`⚠️ Account ID / Username "@${cleanUsername}" already connected! Please enter a different User ID.`)
       return
     }
 
@@ -163,6 +150,7 @@ export default function AccountsPage() {
 
     // Simulate API Authorization Step
     setTimeout(() => {
+      const platformKey = connectModalPlatform?.platform || 'facebook'
       const meta = PLATFORM_META[platformKey] || { label: 'Social' }
 
       const newAccount = {
@@ -178,7 +166,11 @@ export default function AccountsPage() {
         ],
       }
 
-      setAccounts((prev) => [newAccount, ...prev])
+      setAccounts((prev) => {
+        const updated = [newAccount, ...prev]
+        try { sessionStorage.setItem('sp_cached_accounts', JSON.stringify(updated)) } catch {}
+        return updated
+      })
       setConnectingProgress(false)
       setConnectModalPlatform(null)
       addToast(`✅ ${meta.label} account "@${cleanUsername}" connected successfully!`, 'success')
@@ -191,9 +183,11 @@ export default function AccountsPage() {
     try {
       await socialApi.syncAccount(id).catch(() => {})
       addToast('Account synchronized successfully!', 'success')
-      setAccounts((prev) =>
-        prev.map((a) => (a.id === id ? { ...a, last_synced_at: new Date().toISOString(), status: 'connected' } : a))
-      )
+      setAccounts((prev) => {
+        const updated = prev.map((a) => (a.id === id ? { ...a, last_synced_at: new Date().toISOString(), status: 'connected' } : a))
+        try { sessionStorage.setItem('sp_cached_accounts', JSON.stringify(updated)) } catch {}
+        return updated
+      })
     } catch {
       addToast('Sync complete.', 'info')
     } finally {
@@ -201,32 +195,36 @@ export default function AccountsPage() {
     }
   }
 
-  // Disconnect - open styled in-app confirmation modal
-  const handleOpenDisconnectModal = (account) => {
-    setAccountToDisconnect(account)
-  }
-
-  // Confirm Disconnect
-  const handleConfirmDisconnect = async () => {
-    if (!accountToDisconnect) return
-    const id = accountToDisconnect.id
-    const meta = PLATFORM_META[accountToDisconnect.platform] || { label: 'Account' }
+  // Disconnect
+  const handleDisconnect = async (id) => {
+    const account = accounts.find((a) => a.id === id)
+    const meta = PLATFORM_META[account?.platform] || { label: 'account' }
+    if (!window.confirm(`Disconnect ${meta.label} account "${account?.account_name}"?`)) return
 
     setDisconnectingId(id)
     try {
-      await socialApi.disconnectAccount(id)
-      setAccounts((prev) => prev.filter((a) => a.id !== id))
-      addToast(`${meta.label} account "${accountToDisconnect.account_name}" disconnected successfully.`, 'info')
-      setAccountToDisconnect(null)
-    } catch (err) {
-      const detail = err.response?.data?.detail || 'Account disconnected.'
-      setAccounts((prev) => prev.filter((a) => a.id !== id))
-      addToast(detail, 'info')
-      setAccountToDisconnect(null)
+      await socialApi.disconnectAccount(id).catch(() => {})
+      setAccounts((prev) => {
+        const updated = prev.filter((a) => a.id !== id)
+        try { sessionStorage.setItem('sp_cached_accounts', JSON.stringify(updated)) } catch {}
+        return updated
+      })
+      addToast(`${meta.label} account disconnected.`, 'info')
+    } catch {
+      setAccounts((prev) => {
+        const updated = prev.filter((a) => a.id !== id)
+        try { sessionStorage.setItem('sp_cached_accounts', JSON.stringify(updated)) } catch {}
+        return updated
+      })
+      addToast('Account disconnected.', 'info')
     } finally {
       setDisconnectingId(null)
     }
   }
+
+  // Platforms not yet connected
+  const connectedPlatforms  = new Set(accounts.map((a) => a.platform))
+  const unconnectedPlatforms = platforms.filter((p) => !connectedPlatforms.has(p.platform))
 
   return (
     <div className="app-layout body-bg">
@@ -242,50 +240,52 @@ export default function AccountsPage() {
 
         <ToastContainer toasts={toasts} onRemove={removeToast} />
 
-        {loading ? (
-          <LoadingState message="Loading accounts…" size="lg" />
+        {/* ── Connected Accounts ── */}
+        {loading && accounts.length === 0 ? (
+          <GlowCard className="accounts-section" hover={false}>
+            <div className="section-title-row">
+              <h2 className="ds-title">Connected Accounts</h2>
+            </div>
+            <LoadingState message="Loading your accounts…" size="sm" />
+          </GlowCard>
         ) : (
-          <>
-            {/* ── Connected Accounts ── */}
-            {accounts.length > 0 && (
-              <GlowCard className="accounts-section" hover={false}>
-                <div className="section-title-row">
-                  <h2 className="ds-title">Connected Accounts ({accounts.length})</h2>
-                </div>
-                <div className="accounts-list">
-                  {accounts.map((acc) => (
-                    <SocialAccountCard
-                      key={acc.id}
-                      account={acc}
-                      onSync={handleSync}
-                      onDisconnect={() => handleOpenDisconnectModal(acc)}
-                      syncLoading={syncingId === acc.id}
-                      disconnectLoading={disconnectingId === acc.id}
-                    />
-                  ))}
-                </div>
-              </GlowCard>
-            )}
-
-            {/* ── Available Platforms & Add Accounts ── */}
+          accounts.length > 0 && (
             <GlowCard className="accounts-section" hover={false}>
               <div className="section-title-row">
-                <h2 className="ds-title">Connect Platforms & Add Accounts</h2>
+                <h2 className="ds-title">Connected Accounts ({accounts.length})</h2>
               </div>
-              <div className="platforms-grid">
-                {(platforms.length > 0 ? platforms : DEFAULT_PLATFORMS).map((p) => (
+              <div className="accounts-list">
+                {accounts.map((acc) => (
                   <SocialAccountCard
-                    key={p.platform}
-                    platform={p}
-                    isAvailable
-                    connectedAccountsCount={accounts.filter((a) => a.platform === p.platform).length}
-                    onConnect={() => handleConnectPlatform(p)}
+                    key={acc.id}
+                    account={acc}
+                    onSync={handleSync}
+                    onDisconnect={handleDisconnect}
+                    syncLoading={syncingId === acc.id}
+                    disconnectLoading={disconnectingId === acc.id}
                   />
                 ))}
               </div>
             </GlowCard>
-          </>
+          )
         )}
+
+        {/* ── Available Platforms (Always visible immediately) ── */}
+        <GlowCard className="accounts-section" hover={false}>
+          <div className="section-title-row">
+            <h2 className="ds-title">Connect a Platform</h2>
+          </div>
+          <div className="platforms-grid">
+            {(unconnectedPlatforms.length > 0 ? unconnectedPlatforms : DEFAULT_PLATFORMS).map((p) => (
+              <SocialAccountCard
+                key={p.platform}
+                platform={p}
+                isAvailable
+                onConnect={() => handleOpenConnectModal(p)}
+              />
+            ))}
+          </div>
+        </GlowCard>
 
         {/* ── Step-by-Step Dummy Connection Modal ── */}
         {connectModalPlatform && (
@@ -345,52 +345,6 @@ export default function AccountsPage() {
                 </Button>
               </div>
             </form>
-          </Modal>
-        )}
-
-        {/* ── Disconnect Confirmation Modal ── */}
-        {accountToDisconnect && (
-          <Modal
-            isOpen={true}
-            onClose={() => setAccountToDisconnect(null)}
-            title={`Disconnect ${PLATFORM_META[accountToDisconnect.platform]?.label || 'Social'} Account`}
-          >
-            <div style={{ padding: '8px 0' }}>
-              <p style={{ color: '#e2e8f0', fontSize: '14px', lineHeight: '1.6', marginBottom: '12px' }}>
-                Are you sure you want to disconnect <strong>{accountToDisconnect.account_name}</strong>
-                {accountToDisconnect.account_username ? ` (@${accountToDisconnect.account_username})` : ''}?
-              </p>
-              <p style={{ color: '#94a3b8', fontSize: '13px', lineHeight: '1.5', marginBottom: '24px' }}>
-                This will remove the account from SocialPilot and revoke scheduled post publishing. You can reconnect it at any time.
-              </p>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setAccountToDisconnect(null)}
-                  disabled={Boolean(disconnectingId)}
-                >
-                  Cancel
-                </Button>
-                <button
-                  type="button"
-                  className="btn btn-danger"
-                  style={{
-                    background: '#ef4444',
-                    color: '#fff',
-                    border: 'none',
-                    padding: '8px 18px',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    fontWeight: 600,
-                  }}
-                  onClick={handleConfirmDisconnect}
-                  disabled={Boolean(disconnectingId)}
-                >
-                  {disconnectingId ? 'Disconnecting…' : 'Disconnect Account'}
-                </button>
-              </div>
-            </div>
           </Modal>
         )}
       </main>

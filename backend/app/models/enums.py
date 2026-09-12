@@ -53,3 +53,45 @@ class TeamMemberRole(str, enum.Enum):
     admin  = "admin"
     member = "member"
     viewer = "viewer"
+
+
+class PostStatus(str, enum.Enum):
+    """Lifecycle status of a social media post."""
+    draft      = "draft"
+    scheduled  = "scheduled"
+    publishing = "publishing"
+    published  = "published"
+    failed     = "failed"
+
+
+
+class RecurrenceFrequency(str, enum.Enum):
+    """Frequency intervals for recurring post rules."""
+    daily   = "daily"
+    weekly  = "weekly"
+    monthly = "monthly"
+
+
+class PublishingJobStatus(str, enum.Enum):
+    """Lifecycle status of a platform publishing job in the queue (Phase 8)."""
+    queued     = "queued"
+    processing = "processing"
+    published  = "published"
+    retrying   = "retrying"
+    failed     = "failed"
+    cancelled  = "cancelled"
+
+
+class PublishingLogEventType(str, enum.Enum):
+    """Event types recorded during publishing lifecycle (Phase 9)."""
+    queued              = "QUEUED"
+    processing          = "PROCESSING"
+    publishing_started  = "PUBLISHING_STARTED"
+    published           = "PUBLISHED"
+    retrying            = "RETRYING"
+    failed              = "FAILED"
+    cancelled           = "CANCELLED"
+
+
+
+

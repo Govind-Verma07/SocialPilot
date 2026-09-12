@@ -18,9 +18,8 @@ motor==3.4.0              # async MongoDB driver (Motor wraps pymongo)
 pymongo==4.7.3            # sync MongoDB driver (Motor dependency)
 
 # --- Authentication ---
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-bcrypt==4.0.1
+python-jose[cryptography]==3.3.0   # JWT
+passlib[bcrypt]==1.7.4             # password hashing (bcrypt)
 
 # --- Validation / Settings ---
 pydantic==2.8.2
