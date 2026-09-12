@@ -19,7 +19,6 @@ export default function SocialAccountCard({
   account,
   platform,
   isAvailable = false,
-  connectedAccountsCount = 0,
   onConnect,
   onSync,
   onDisconnect,
@@ -34,24 +33,18 @@ export default function SocialAccountCard({
 
   if (isAvailable) {
     const p = platform
-    const count = connectedAccountsCount || 0
     return (
       <div className="social-card social-card--available">
         <div className="social-card-left">
           <span className="social-card-platform-icon" style={{ color: meta.color }}>{meta.icon}</span>
           <div className="social-card-info">
             <span className="social-card-name">{meta.label}</span>
-            {count > 0 ? (
-              <span className="social-card-connected-count" style={{ color: '#10b981', fontSize: '11px', fontWeight: 600 }}>
-                ● {count} account{count > 1 ? 's' : ''} connected
-              </span>
-            ) : !p.is_configured ? (
+            {!p.is_configured && (
               <span className="social-card-warning">⏳ Awaiting platform credentials</span>
-            ) : null}
+            )}
           </div>
         </div>
         <button
-          id={`connect-${p.platform}-btn`}
           className="btn btn-primary btn-sm"
           style={{
             background: meta.color,
@@ -62,7 +55,7 @@ export default function SocialAccountCard({
           }}
           onClick={() => onConnect(p)}
         >
-          {count > 0 ? '+ Add Another Account' : '+ Connect Account'}
+          + Connect Account
         </button>
       </div>
     )

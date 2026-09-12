@@ -7,7 +7,6 @@ Milestone 1 supported platforms:
 """
 
 import json
-import secrets
 from datetime import datetime, timezone
 from typing import List, Optional
 from urllib.parse import urlencode
@@ -15,14 +14,15 @@ from urllib.parse import urlencode
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
 from jose import JWTError, jwt
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 
-from app.core.config import settings, get_settings
-from app.core.encryption import encrypt_token, decrypt_token
+from app.core.config import settings
+from app.core.encryption import encrypt_token
 from app.db.session import get_db
 from app.models.enums import AccountStatus, SocialPlatform, SyncStatus
 from app.models.social_account import AccountPermission, AccountSyncLog, SocialAccount
 from app.models.user import User
+import collections
 from app.schemas.social import (
     AccountPermissionOut,
     SocialAccountOut,
@@ -33,8 +33,8 @@ from app.schemas.social import (
 from app.services.auth_service import get_current_user
 from app.services.social_metadata_service import (
     delete_social_metadata,
+    get_batch_social_metadata,
     get_social_metadata,
-    get_social_metadata_batch,
     save_social_metadata,
 )
 from app.services.social_providers import get_all_providers, get_provider
@@ -44,26 +44,8 @@ router = APIRouter()
 STATE_TOKEN_EXPIRE_MINUTES = 15
 
 
-# In-memory PKCE code_verifier cache with expiration (sid -> (code_verifier, expire_timestamp))
-# Used to keep the OAuth state token compact (~250-260 chars), well within X's 500-char limit.
-_PKCE_CACHE: dict[str, tuple[str, float]] = {}
-
-
-def _cleanup_pkce_cache() -> None:
-    """Remove expired PKCE verifiers from in-memory cache."""
-    now = datetime.now(timezone.utc).timestamp()
-    expired = [k for k, (_, exp) in _PKCE_CACHE.items() if exp < now]
-    for k in expired:
-        _PKCE_CACHE.pop(k, None)
-
-
-def _create_oauth_state(
-    user_id: str,
-    team_id: Optional[str] = None,
-    code_verifier: Optional[str] = None,
-) -> str:
-    """Create a signed state token encoding user_id, optional team_id, and compact PKCE sid."""
-    _cleanup_pkce_cache()
+def _create_oauth_state(user_id: str, team_id: Optional[str] = None) -> str:
+    """Create a signed state token encoding user_id and optional team_id."""
     expire = datetime.now(timezone.utc).timestamp() + (STATE_TOKEN_EXPIRE_MINUTES * 60)
     payload = {
         "sub": user_id,
@@ -71,18 +53,11 @@ def _create_oauth_state(
         "exp": expire,
         "type": "oauth_state",
     }
-    if code_verifier:
-        # Cache verifier in-memory with a compact random 16-byte sid (~22 chars)
-        # Keeps overall state JWT length ~260 chars (well under X's strict 500 character limit)
-        sid = secrets.token_urlsafe(16)
-        _PKCE_CACHE[sid] = (code_verifier, expire)
-        payload["sid"] = sid
     return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
 
 def _decode_oauth_state(state_token: str) -> dict:
-    """Decode and validate the OAuth state token, resolving PKCE code_verifier."""
-    _cleanup_pkce_cache()
+    """Decode and validate the OAuth state token."""
     try:
         payload = jwt.decode(
             state_token,
@@ -91,41 +66,12 @@ def _decode_oauth_state(state_token: str) -> dict:
         )
         if payload.get("type") != "oauth_state":
             raise ValueError("Invalid state type")
-        
-        # 1. Check if sid is present in payload (compact server-side PKCE cache)
-        if "sid" in payload and payload["sid"]:
-            sid = payload["sid"]
-            cached = _PKCE_CACHE.pop(sid, None)
-            if cached:
-                payload["code_verifier"] = cached[0]
-
-        # 2. Fallback check if code_verifier was directly encrypted in token
-        if not payload.get("code_verifier") and "code_verifier" in payload and payload["code_verifier"]:
-            payload["code_verifier"] = decrypt_token(payload["code_verifier"])
-
         return payload
     except (JWTError, ValueError) as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid or expired OAuth state parameter.",
         ) from exc
-
-
-def _get_platform_redirect_uri(platform_name: str, request: Request) -> str:
-    """Return configured platform redirect URI or build dynamically from request."""
-    s = get_settings()
-    if platform_name == SocialPlatform.facebook.value and getattr(s, "FACEBOOK_REDIRECT_URI", ""):
-        return s.FACEBOOK_REDIRECT_URI
-    if platform_name == SocialPlatform.instagram.value and getattr(s, "INSTAGRAM_REDIRECT_URI", ""):
-        return s.INSTAGRAM_REDIRECT_URI
-    if platform_name == SocialPlatform.linkedin.value and getattr(s, "LINKEDIN_REDIRECT_URI", ""):
-        return s.LINKEDIN_REDIRECT_URI
-    if platform_name == SocialPlatform.x.value and getattr(s, "X_REDIRECT_URI", ""):
-        return s.X_REDIRECT_URI
-    if platform_name == SocialPlatform.youtube.value and getattr(s, "YOUTUBE_REDIRECT_URI", ""):
-        return s.YOUTUBE_REDIRECT_URI
-    base_url = str(request.base_url).rstrip("/")
-    return f"{base_url}{s.API_V1_PREFIX}/social/oauth/{platform_name}/callback"
 
 
 # ---------------------------------------------------------------------------
@@ -156,54 +102,13 @@ def list_platforms() -> List[SocialPlatformInfo]:
 # OAuth Authorization URL Generator
 # ---------------------------------------------------------------------------
 
-@router.get("/oauth/x/authorize")
-def authorize_x(
-    request: Request,
-    team_id: Optional[str] = None,
-    redirect: bool = Query(False, description="If true, 302 redirects user directly to X authorization URL"),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Generate X (Twitter) OAuth 2.0 PKCE authorization redirect URL.
-    Returns SocialAuthUrlOut JSON, or 302 RedirectResponse when redirect=True.
-    """
-    return get_authorization_url(
-        platform="x",
-        request=request,
-        team_id=team_id,
-        redirect=redirect,
-        current_user=current_user,
-    )
-
-
-@router.get("/oauth/youtube/authorize")
-def authorize_youtube(
-    request: Request,
-    team_id: Optional[str] = None,
-    redirect: bool = Query(False, description="If true, 302 redirects user directly to YouTube authorization URL"),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Generate YouTube (Google OAuth 2.0) authorization redirect URL.
-    Returns SocialAuthUrlOut JSON, or 302 RedirectResponse when redirect=True.
-    """
-    return get_authorization_url(
-        platform="youtube",
-        request=request,
-        team_id=team_id,
-        redirect=redirect,
-        current_user=current_user,
-    )
-
-
-@router.get("/oauth/{platform}/authorize")
+@router.get("/oauth/{platform}/authorize", response_model=SocialAuthUrlOut, status_code=status.HTTP_200_OK)
 def get_authorization_url(
     platform: str,
     request: Request,
     team_id: Optional[str] = None,
-    redirect: bool = Query(False, description="If true, 302 redirects user directly to authorization URL"),
     current_user: User = Depends(get_current_user),
-):
+) -> SocialAuthUrlOut:
     """
     Generate the OAuth authorization redirect URL for the specified platform.
     If the platform credentials are not configured, returns a clear notice without faking connection.
@@ -226,23 +131,12 @@ def get_authorization_url(
             ),
         )
 
-    redirect_uri = _get_platform_redirect_uri(provider.platform.value, request)
+    # Build dynamic redirect URI based on backend URL
+    base_url = str(request.base_url).rstrip("/")
+    redirect_uri = f"{base_url}{settings.API_V1_PREFIX}/social/oauth/{provider.platform.value}/callback"
 
-    code_verifier = None
-    code_challenge = None
-    if provider.platform == SocialPlatform.x:
-        from app.services.social_providers.x import generate_code_verifier, generate_code_challenge
-        code_verifier = generate_code_verifier()
-        code_challenge = generate_code_challenge(code_verifier)
-
-    state = _create_oauth_state(user_id=current_user.id, team_id=team_id, code_verifier=code_verifier)
-    if provider.platform == SocialPlatform.x and code_challenge:
-        auth_url = provider.get_authorization_url(state=state, redirect_uri=redirect_uri, code_challenge=code_challenge)
-    else:
-        auth_url = provider.get_authorization_url(state=state, redirect_uri=redirect_uri)
-
-    if redirect and auth_url:
-        return RedirectResponse(auth_url, status_code=status.HTTP_302_FOUND)
+    state = _create_oauth_state(user_id=current_user.id, team_id=team_id)
+    auth_url = provider.get_authorization_url(state=state, redirect_uri=redirect_uri)
 
     return SocialAuthUrlOut(
         platform=provider.platform,
@@ -256,7 +150,6 @@ def get_authorization_url(
 # ---------------------------------------------------------------------------
 
 @router.get("/oauth/{platform}/callback")
-@router.get("/oauth/{platform}/callback/")
 async def oauth_callback(
     platform: str,
     request: Request,
@@ -271,8 +164,7 @@ async def oauth_callback(
     Validates state, exchanges code for tokens, retrieves profile, encrypts tokens,
     and updates PostgreSQL and MongoDB records.
     """
-    s = get_settings()
-    frontend_base = s.FRONTEND_URL.strip() if s.FRONTEND_URL else (s.allowed_origins_list[0] if s.allowed_origins_list else "http://localhost:5173")
+    frontend_base = settings.allowed_origins_list[0] if settings.allowed_origins_list else "http://localhost:5173"
 
     if error:
         err_msg = error_description or error or "OAuth authorization was canceled or failed."
@@ -291,7 +183,6 @@ async def oauth_callback(
     state_payload = _decode_oauth_state(state)
     user_id = state_payload.get("sub")
     team_id = state_payload.get("team_id")
-    code_verifier = state_payload.get("code_verifier")
 
     provider = get_provider(platform)
     if not provider:
@@ -299,18 +190,11 @@ async def oauth_callback(
         return RedirectResponse(f"{frontend_base}/accounts?{params}")
 
     # Build redirect URI matching authorize call
-    redirect_uri = _get_platform_redirect_uri(provider.platform.value, request)
-    clean_code = code.split("#")[0].rstrip("_") if code else code
+    base_url = str(request.base_url).rstrip("/")
+    redirect_uri = f"{base_url}{settings.API_V1_PREFIX}/social/oauth/{provider.platform.value}/callback"
 
     try:
-        if provider.platform == SocialPlatform.x and code_verifier:
-            token_data = await provider.exchange_code(
-                code=clean_code,
-                redirect_uri=redirect_uri,
-                code_verifier=code_verifier,
-            )
-        else:
-            token_data = await provider.exchange_code(code=clean_code, redirect_uri=redirect_uri)
+        token_data = await provider.exchange_code(code=code, redirect_uri=redirect_uri)
         access_token = token_data.get("access_token")
         refresh_token = token_data.get("refresh_token")
         expires_in = token_data.get("expires_in")
@@ -324,7 +208,6 @@ async def oauth_callback(
         account_username = profile_data.get("account_username", "")
         profile_picture_url = profile_data.get("profile_picture_url")
         raw_metadata = profile_data.get("raw_metadata", {})
-        effective_access_token = profile_data.get("access_token") or access_token
 
         # Check existing account
         existing_account = db.query(SocialAccount).filter(
@@ -341,7 +224,7 @@ async def oauth_callback(
             account.account_name = account_name
             account.account_username = account_username
             account.status = AccountStatus.connected.value
-            account.access_token_encrypted = encrypt_token(effective_access_token)
+            account.access_token_encrypted = encrypt_token(access_token)
             if refresh_token:
                 account.refresh_token_encrypted = encrypt_token(refresh_token)
             account.token_expires_at = expires_at
@@ -357,7 +240,7 @@ async def oauth_callback(
                 account_name=account_name,
                 account_username=account_username,
                 status=AccountStatus.connected.value,
-                access_token_encrypted=encrypt_token(effective_access_token),
+                access_token_encrypted=encrypt_token(access_token),
                 refresh_token_encrypted=encrypt_token(refresh_token) if refresh_token else None,
                 token_expires_at=expires_at,
                 connected_at=now,
@@ -386,48 +269,6 @@ async def oauth_callback(
         db.add(sync_log)
         db.commit()
 
-        # Connect any additional authorized Facebook Pages
-        all_pages = raw_metadata.get("all_pages", [])
-        if all_pages and len(all_pages) > 1:
-            for extra_page in all_pages[1:]:
-                ep_id = str(extra_page.get("id"))
-                ep_name = extra_page.get("name", "Facebook Page")
-                ep_username = ep_name.lower().replace(" ", "_")
-                ep_token = extra_page.get("access_token") or access_token
-
-                existing_ep = db.query(SocialAccount).filter(
-                    SocialAccount.user_id == user_id,
-                    SocialAccount.platform == provider.platform.value,
-                    SocialAccount.platform_account_id == ep_id,
-                ).first()
-
-                if existing_ep:
-                    existing_ep.account_name = ep_name
-                    existing_ep.account_username = ep_username
-                    existing_ep.status = AccountStatus.connected.value
-                    existing_ep.access_token_encrypted = encrypt_token(ep_token)
-                    existing_ep.last_synced_at = now
-                else:
-                    new_page_acc = SocialAccount(
-                        user_id=user_id,
-                        team_id=team_id,
-                        platform=provider.platform.value,
-                        platform_account_id=ep_id,
-                        account_name=ep_name,
-                        account_username=ep_username,
-                        status=AccountStatus.connected.value,
-                        access_token_encrypted=encrypt_token(ep_token),
-                        connected_at=now,
-                        last_synced_at=now,
-                    )
-                    db.add(new_page_acc)
-                    db.commit()
-                    db.refresh(new_page_acc)
-
-                    for perm_name in provider.supported_permissions:
-                        db.add(AccountPermission(social_account_id=new_page_acc.id, permission=perm_name, granted=True))
-                    db.commit()
-
         # Save flexible rich metadata in MongoDB
         await save_social_metadata(
             social_account_id=account.id,
@@ -444,65 +285,12 @@ async def oauth_callback(
         return RedirectResponse(f"{frontend_base}/accounts?{params}")
 
 
-@router.get("/oauth/x/callback")
-@router.get("/oauth/x/callback/")
-async def oauth_x_callback(
-    request: Request,
-    code: Optional[str] = Query(None),
-    state: Optional[str] = Query(None),
-    error: Optional[str] = Query(None),
-    error_description: Optional[str] = Query(None),
-    db: Session = Depends(get_db),
-):
-    """Handle OAuth 2.0 authorization callback for X (Twitter)."""
-    return await oauth_callback(
-        platform="x",
-        request=request,
-        code=code,
-        state=state,
-        error=error,
-        error_description=error_description,
-        db=db,
-    )
-
-
-@router.get("/oauth/youtube/callback")
-@router.get("/oauth/youtube/callback/")
-async def oauth_youtube_callback(
-    request: Request,
-    code: Optional[str] = Query(None),
-    state: Optional[str] = Query(None),
-    error: Optional[str] = Query(None),
-    error_description: Optional[str] = Query(None),
-    db: Session = Depends(get_db),
-):
-    """Handle Google OAuth 2.0 authorization callback for YouTube."""
-    return await oauth_callback(
-        platform="youtube",
-        request=request,
-        code=code,
-        state=state,
-        error=error,
-        error_description=error_description,
-        db=db,
-    )
-
-
 # ---------------------------------------------------------------------------
 # Account Management Endpoints
 # ---------------------------------------------------------------------------
 
-async def _build_social_account_out(
-    account: SocialAccount,
-    db: Session,
-    metadata: Optional[dict] = None,
-    from_batch: bool = False,
-) -> SocialAccountOut:
-    permissions = (
-        account.permissions
-        if hasattr(account, "permissions") and account.permissions is not None
-        else db.query(AccountPermission).filter(AccountPermission.social_account_id == account.id).all()
-    )
+async def _build_social_account_out(account: SocialAccount, db: Session) -> SocialAccountOut:
+    permissions = db.query(AccountPermission).filter(AccountPermission.social_account_id == account.id).all()
     perms_out = [
         AccountPermissionOut(
             id=p.id,
@@ -515,12 +303,7 @@ async def _build_social_account_out(
         for p in permissions
     ]
 
-    if metadata is not None:
-        mongo_doc = metadata
-    elif not from_batch:
-        mongo_doc = await get_social_metadata(account.id)
-    else:
-        mongo_doc = None
+    mongo_doc = await get_social_metadata(account.id)
     pic_url = mongo_doc.get("profile_picture_url") if mongo_doc else None
 
     return SocialAccountOut(
@@ -548,7 +331,7 @@ async def list_social_accounts(
     db: Session = Depends(get_db),
 ) -> List[SocialAccountOut]:
     """List all connected social media accounts for the user or workspace."""
-    query = db.query(SocialAccount).options(joinedload(SocialAccount.permissions))
+    query = db.query(SocialAccount)
     if team_id:
         query = query.filter(SocialAccount.team_id == team_id)
     else:
@@ -558,10 +341,53 @@ async def list_social_accounts(
     if not accounts:
         return []
 
-    acc_ids = [acc.id for acc in accounts]
-    meta_map = await get_social_metadata_batch(acc_ids)
+    account_ids = [acc.id for acc in accounts]
 
-    return [await _build_social_account_out(acc, db, metadata=meta_map.get(acc.id), from_batch=True) for acc in accounts]
+    # Batch fetch permissions in 1 single SQL query instead of N sequential queries
+    permissions = (
+        db.query(AccountPermission)
+        .filter(AccountPermission.social_account_id.in_(account_ids))
+        .all()
+    )
+    perms_by_account: dict[str, list[AccountPermissionOut]] = collections.defaultdict(list)
+    for p in permissions:
+        perms_by_account[p.social_account_id].append(
+            AccountPermissionOut(
+                id=p.id,
+                social_account_id=p.social_account_id,
+                permission=p.permission,
+                granted=p.granted,
+                created_at=p.created_at,
+                updated_at=p.updated_at,
+            )
+        )
+
+    # Batch fetch metadata in 1 single call with fast timeout
+    metadata_map = await get_batch_social_metadata(account_ids)
+
+    result = []
+    for acc in accounts:
+        meta_doc = metadata_map.get(acc.id)
+        pic_url = meta_doc.get("profile_picture_url") if meta_doc else None
+        result.append(
+            SocialAccountOut(
+                id=acc.id,
+                user_id=acc.user_id,
+                team_id=acc.team_id,
+                platform=SocialPlatform(acc.platform),
+                platform_account_id=acc.platform_account_id,
+                account_name=acc.account_name,
+                account_username=acc.account_username,
+                status=AccountStatus(acc.status),
+                connected_at=acc.connected_at,
+                last_synced_at=acc.last_synced_at,
+                created_at=acc.created_at,
+                updated_at=acc.updated_at,
+                permissions=perms_by_account[acc.id],
+                profile_picture_url=pic_url,
+            )
+        )
+    return result
 
 
 @router.get("/accounts/{account_id}", response_model=SocialAccountOut, status_code=status.HTTP_200_OK)

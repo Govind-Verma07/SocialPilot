@@ -13,11 +13,20 @@ from app.models.enums import (
     AccountStatus,
     SyncStatus,
     TeamMemberRole,
+    PostStatus,
+    RecurrenceFrequency,
+    PublishingJobStatus,
+    PublishingLogEventType,
 )
 from app.models.user import User
 from app.models.team import Team, TeamMember
 from app.models.social_account import SocialAccount, AccountPermission, AccountSyncLog
 from app.models.user_settings import UserSettings
+from app.models.post import Post, PostSocialAccount
+from app.models.post_publish_result import PostPublishResult
+from app.models.recurring_rule import RecurringRule, RecurringRuleSocialAccount
+from app.models.publishing_job import PublishingJob
+from app.models.publishing_log import PublishingLog
 
 __all__ = [
     "UserRole",
@@ -25,6 +34,10 @@ __all__ = [
     "AccountStatus",
     "SyncStatus",
     "TeamMemberRole",
+    "PostStatus",
+    "RecurrenceFrequency",
+    "PublishingJobStatus",
+    "PublishingLogEventType",
     "User",
     "Team",
     "TeamMember",
@@ -32,4 +45,13 @@ __all__ = [
     "AccountPermission",
     "AccountSyncLog",
     "UserSettings",
+    "Post",
+    "PostSocialAccount",
+    "PostPublishResult",
+    "RecurringRule",
+    "RecurringRuleSocialAccount",
+    "PublishingJob",
+    "PublishingLog",
 ]
+
+

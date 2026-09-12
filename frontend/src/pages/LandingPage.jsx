@@ -162,12 +162,7 @@ export default function LandingPage() {
           <span className="brand-icon">🚀</span>
           <span className="brand-name">SocialPilot</span>
         </div>
-        <div className="landing-footer-links" style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-          <Link to="/privacy" style={{ color: 'var(--clr-text-muted)', textDecoration: 'none', fontSize: '13px' }}>
-            Privacy Policy
-          </Link>
-          <p className="footer-copy" style={{ margin: 0 }}>© 2026 SocialPilot. All rights reserved.</p>
-        </div>
+        <p className="footer-copy">© 2026 SocialPilot. All rights reserved.</p>
       </footer>
     </div>
   )

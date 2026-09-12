@@ -82,17 +82,6 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        # Check if the DB has a stale/orphan revision that doesn't exist in versions/
-        try:
-            from sqlalchemy import text
-            rev_row = connection.execute(text("SELECT version_num FROM alembic_version LIMIT 1")).fetchone()
-            if rev_row and rev_row[0] == '8d0eb72eda8f':
-                # Reconcile stale revision with current head
-                connection.execute(text("UPDATE alembic_version SET version_num = '9dd7efe62534'"))
-                connection.commit()
-        except Exception:
-            pass
-
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
