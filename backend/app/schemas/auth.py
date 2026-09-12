@@ -62,6 +62,26 @@ class UserLogin(BaseModel):
         return v.strip().lower()
 
 
+class UserResetPassword(BaseModel):
+    """Payload for POST /auth/reset-password."""
+    email: EmailStr = Field(..., examples=["jane@example.com"])
+    new_password: str = Field(..., min_length=8, max_length=100, examples=["NewStr0ng#Pass!"])
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        return v.strip().lower()
+
+    @field_validator("new_password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        if not any(c.isupper() for c in v):
+            raise ValueError("Password must contain at least one uppercase letter.")
+        if not any(c.isdigit() for c in v):
+            raise ValueError("Password must contain at least one digit.")
+        return v
+
+
 # ---------------------------------------------------------------------------
 # Response schemas
 # ---------------------------------------------------------------------------

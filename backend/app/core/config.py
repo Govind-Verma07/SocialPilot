@@ -50,6 +50,15 @@ class Settings(BaseSettings):
     PINTEREST_CLIENT_ID: str = ""
     PINTEREST_CLIENT_SECRET: str = ""
 
+    # --- Redis & Celery Background Worker ---
+    REDIS_URL: str = "redis://localhost:6379/0"
+    CELERY_BROKER_URL: str = "redis://localhost:6379/0"
+    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
+
+    # --- Phase 8: Publishing Queue & Retry ---
+    MAX_PUBLISH_RETRIES: int = 3
+    PUBLISH_RETRY_BACKOFF_SECONDS: str = "60,300,900"
+
     @property
     def allowed_origins_list(self) -> List[str]:
         """Return CORS origins as a Python list."""

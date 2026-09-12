@@ -9,6 +9,7 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { authApi } from '../api/authApi'
+import Modal from '../components/Modal'
 import logoImg from '../assets/logo.png'
 import './AuthPages.css'
 
@@ -84,6 +85,13 @@ export default function LoginPage() {
   const [touched, setTouched]   = useState({})
   const [googleLoading, setGoogleLoading] = useState(false)
 
+  // Forgot Password Modal State
+  const [forgotOpen, setForgotOpen]         = useState(false)
+  const [forgotEmail, setForgotEmail]       = useState('')
+  const [forgotPassword, setForgotPassword] = useState('')
+  const [forgotError, setForgotError]       = useState('')
+  const [forgotLoading, setForgotLoading]   = useState(false)
+
   // ── Process Google OAuth callback token / error on mount ───────────────────
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -121,14 +129,53 @@ export default function LoginPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!form.email.includes('@')) { setError('Please enter a valid email address.'); return }
+    const cleanEmail = form.email.trim().toLowerCase()
+    if (!cleanEmail.includes('@')) { setError('Please enter a valid email address.'); return }
     if (!form.password)            { setError('Please enter your password.'); return }
 
-    const result = await login({ email: form.email, password: form.password })
+    const result = await login({ email: cleanEmail, password: form.password })
     if (result.success) {
       navigate('/dashboard')
     } else {
       setError(result.message)
+    }
+  }
+
+  const handleOpenForgot = (e) => {
+    e.preventDefault()
+    setForgotEmail(form.email ? form.email.trim().toLowerCase() : '')
+    setForgotPassword('')
+    setForgotError('')
+    setForgotOpen(true)
+  }
+
+  const handleResetSubmit = async (e) => {
+    e.preventDefault()
+    const cleanEmail = forgotEmail.trim().toLowerCase()
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setForgotError('Please enter a valid email address.')
+      return
+    }
+    if (!forgotPassword || forgotPassword.length < 8) {
+      setForgotError('Password must be at least 8 characters.')
+      return
+    }
+    if (!/[A-Z]/.test(forgotPassword) || !/[0-9]/.test(forgotPassword)) {
+      setForgotError('Password must contain at least one uppercase letter and one digit (e.g. Password123).')
+      return
+    }
+
+    setForgotLoading(true)
+    setForgotError('')
+    try {
+      const res = await authApi.resetPassword({ email: cleanEmail, new_password: forgotPassword })
+      setForgotOpen(false)
+      setSuccessMsg(res.data?.message || 'Password reset successfully! Please log in with your new password.')
+      setForm((prev) => ({ ...prev, email: cleanEmail, password: '' }))
+    } catch (err) {
+      setForgotError(err.response?.data?.detail || 'Failed to reset password. Please verify the email address.')
+    } finally {
+      setForgotLoading(false)
     }
   }
 
@@ -280,7 +327,7 @@ export default function LoginPage() {
                 />
                 <span>Remember me</span>
               </label>
-              <a href="#" className="forgot-link" onClick={(e) => e.preventDefault()}>
+              <a href="#" className="forgot-link" onClick={handleOpenForgot}>
                 Forgot Password?
               </a>
             </div>
@@ -319,6 +366,59 @@ export default function LoginPage() {
           </div>
         </div>
       </main>
+
+      {/* Forgot Password Modal */}
+      <Modal
+        isOpen={forgotOpen}
+        onClose={() => setForgotOpen(false)}
+        title="Reset Account Password"
+      >
+        <form onSubmit={handleResetSubmit} className="neon-form" style={{ gap: '16px' }}>
+          <p style={{ color: '#94a3b8', fontSize: '13px', margin: '0 0 8px 0' }}>
+            Enter your registered email address and choose a new password.
+          </p>
+
+          {forgotError && (
+            <div className="alert-neon-error" role="alert">
+              <span>⚠️</span>
+              <span>{forgotError}</span>
+            </div>
+          )}
+
+          <div className="input-field-group">
+            <span className="input-icon-left"><MailIcon /></span>
+            <input
+              type="email"
+              placeholder="Registered Email Address"
+              value={forgotEmail}
+              onChange={(e) => setForgotEmail(e.target.value)}
+              className="neon-input"
+              required
+            />
+          </div>
+
+          <div className="input-field-group">
+            <span className="input-icon-left"><LockIcon /></span>
+            <input
+              type="password"
+              placeholder="New Password (e.g. Password123)"
+              value={forgotPassword}
+              onChange={(e) => setForgotPassword(e.target.value)}
+              className="neon-input"
+              required
+            />
+          </div>
+
+          <button
+            type="submit"
+            className="btn-neon-primary"
+            disabled={forgotLoading}
+            style={{ width: '100%', marginTop: '4px' }}
+          >
+            {forgotLoading ? 'Updating Password…' : 'Update Password →'}
+          </button>
+        </form>
+      </Modal>
     </div>
   )
 }

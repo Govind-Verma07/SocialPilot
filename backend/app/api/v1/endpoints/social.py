@@ -22,6 +22,7 @@ from app.db.session import get_db
 from app.models.enums import AccountStatus, SocialPlatform, SyncStatus
 from app.models.social_account import AccountPermission, AccountSyncLog, SocialAccount
 from app.models.user import User
+import collections
 from app.schemas.social import (
     AccountPermissionOut,
     SocialAccountOut,
@@ -32,6 +33,7 @@ from app.schemas.social import (
 from app.services.auth_service import get_current_user
 from app.services.social_metadata_service import (
     delete_social_metadata,
+    get_batch_social_metadata,
     get_social_metadata,
     save_social_metadata,
 )
@@ -336,7 +338,56 @@ async def list_social_accounts(
         query = query.filter(SocialAccount.user_id == current_user.id)
 
     accounts = query.order_by(SocialAccount.created_at.desc()).all()
-    return [await _build_social_account_out(acc, db) for acc in accounts]
+    if not accounts:
+        return []
+
+    account_ids = [acc.id for acc in accounts]
+
+    # Batch fetch permissions in 1 single SQL query instead of N sequential queries
+    permissions = (
+        db.query(AccountPermission)
+        .filter(AccountPermission.social_account_id.in_(account_ids))
+        .all()
+    )
+    perms_by_account: dict[str, list[AccountPermissionOut]] = collections.defaultdict(list)
+    for p in permissions:
+        perms_by_account[p.social_account_id].append(
+            AccountPermissionOut(
+                id=p.id,
+                social_account_id=p.social_account_id,
+                permission=p.permission,
+                granted=p.granted,
+                created_at=p.created_at,
+                updated_at=p.updated_at,
+            )
+        )
+
+    # Batch fetch metadata in 1 single call with fast timeout
+    metadata_map = await get_batch_social_metadata(account_ids)
+
+    result = []
+    for acc in accounts:
+        meta_doc = metadata_map.get(acc.id)
+        pic_url = meta_doc.get("profile_picture_url") if meta_doc else None
+        result.append(
+            SocialAccountOut(
+                id=acc.id,
+                user_id=acc.user_id,
+                team_id=acc.team_id,
+                platform=SocialPlatform(acc.platform),
+                platform_account_id=acc.platform_account_id,
+                account_name=acc.account_name,
+                account_username=acc.account_username,
+                status=AccountStatus(acc.status),
+                connected_at=acc.connected_at,
+                last_synced_at=acc.last_synced_at,
+                created_at=acc.created_at,
+                updated_at=acc.updated_at,
+                permissions=perms_by_account[acc.id],
+                profile_picture_url=pic_url,
+            )
+        )
+    return result
 
 
 @router.get("/accounts/{account_id}", response_model=SocialAccountOut, status_code=status.HTTP_200_OK)

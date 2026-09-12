@@ -39,8 +39,24 @@ const DEFAULT_PLATFORMS = [
 export default function AccountsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [platforms, setPlatforms]       = useState(DEFAULT_PLATFORMS)
-  const [accounts, setAccounts]         = useState([])
-  const [loading, setLoading]           = useState(true)
+  
+  // Instant load from sessionStorage cache if available
+  const [accounts, setAccounts]         = useState(() => {
+    try {
+      const cached = sessionStorage.getItem('sp_cached_accounts')
+      return cached ? JSON.parse(cached) : []
+    } catch {
+      return []
+    }
+  })
+  const [loading, setLoading]           = useState(() => {
+    try {
+      const cached = sessionStorage.getItem('sp_cached_accounts')
+      return !cached
+    } catch {
+      return true
+    }
+  })
   const [toasts, setToasts]             = useState([])
   const [mobileNav, setMobileNav]       = useState(false)
   const [syncingId, setSyncingId]       = useState(null)
@@ -75,22 +91,28 @@ export default function AccountsPage() {
     }
   }, [searchParams, setSearchParams, addToast])
 
-  // Load data
+  // Load data asynchronously without locking the UI
   const loadData = useCallback(async () => {
-    setLoading(true)
+    // 1. Fetch platforms in background (DEFAULT_PLATFORMS already available)
+    socialApi.getPlatforms()
+      .then((res) => {
+        if (res.data && res.data.length > 0) {
+          setPlatforms(res.data)
+        }
+      })
+      .catch(() => {})
+
+    // 2. Fetch fresh accounts
     try {
-      const [platRes, accRes] = await Promise.all([
-        socialApi.getPlatforms(),
-        socialApi.getAccounts(),
-      ])
-      if (platRes.data && platRes.data.length > 0) {
-        setPlatforms(platRes.data)
-      }
+      const accRes = await socialApi.getAccounts()
       if (accRes.data) {
         setAccounts(accRes.data)
+        try {
+          sessionStorage.setItem('sp_cached_accounts', JSON.stringify(accRes.data))
+        } catch {}
       }
-    } catch {
-      // Keep default platforms for demo capability
+    } catch (err) {
+      console.warn('Could not refresh accounts:', err)
     } finally {
       setLoading(false)
     }
@@ -144,7 +166,11 @@ export default function AccountsPage() {
         ],
       }
 
-      setAccounts((prev) => [newAccount, ...prev])
+      setAccounts((prev) => {
+        const updated = [newAccount, ...prev]
+        try { sessionStorage.setItem('sp_cached_accounts', JSON.stringify(updated)) } catch {}
+        return updated
+      })
       setConnectingProgress(false)
       setConnectModalPlatform(null)
       addToast(`✅ ${meta.label} account "@${cleanUsername}" connected successfully!`, 'success')
@@ -157,9 +183,11 @@ export default function AccountsPage() {
     try {
       await socialApi.syncAccount(id).catch(() => {})
       addToast('Account synchronized successfully!', 'success')
-      setAccounts((prev) =>
-        prev.map((a) => (a.id === id ? { ...a, last_synced_at: new Date().toISOString(), status: 'connected' } : a))
-      )
+      setAccounts((prev) => {
+        const updated = prev.map((a) => (a.id === id ? { ...a, last_synced_at: new Date().toISOString(), status: 'connected' } : a))
+        try { sessionStorage.setItem('sp_cached_accounts', JSON.stringify(updated)) } catch {}
+        return updated
+      })
     } catch {
       addToast('Sync complete.', 'info')
     } finally {
@@ -176,10 +204,18 @@ export default function AccountsPage() {
     setDisconnectingId(id)
     try {
       await socialApi.disconnectAccount(id).catch(() => {})
-      setAccounts((prev) => prev.filter((a) => a.id !== id))
+      setAccounts((prev) => {
+        const updated = prev.filter((a) => a.id !== id)
+        try { sessionStorage.setItem('sp_cached_accounts', JSON.stringify(updated)) } catch {}
+        return updated
+      })
       addToast(`${meta.label} account disconnected.`, 'info')
     } catch {
-      setAccounts((prev) => prev.filter((a) => a.id !== id))
+      setAccounts((prev) => {
+        const updated = prev.filter((a) => a.id !== id)
+        try { sessionStorage.setItem('sp_cached_accounts', JSON.stringify(updated)) } catch {}
+        return updated
+      })
       addToast('Account disconnected.', 'info')
     } finally {
       setDisconnectingId(null)
@@ -204,49 +240,52 @@ export default function AccountsPage() {
 
         <ToastContainer toasts={toasts} onRemove={removeToast} />
 
-        {loading ? (
-          <LoadingState message="Loading accounts…" size="lg" />
+        {/* ── Connected Accounts ── */}
+        {loading && accounts.length === 0 ? (
+          <GlowCard className="accounts-section" hover={false}>
+            <div className="section-title-row">
+              <h2 className="ds-title">Connected Accounts</h2>
+            </div>
+            <LoadingState message="Loading your accounts…" size="sm" />
+          </GlowCard>
         ) : (
-          <>
-            {/* ── Connected Accounts ── */}
-            {accounts.length > 0 && (
-              <GlowCard className="accounts-section" hover={false}>
-                <div className="section-title-row">
-                  <h2 className="ds-title">Connected Accounts ({accounts.length})</h2>
-                </div>
-                <div className="accounts-list">
-                  {accounts.map((acc) => (
-                    <SocialAccountCard
-                      key={acc.id}
-                      account={acc}
-                      onSync={handleSync}
-                      onDisconnect={handleDisconnect}
-                      syncLoading={syncingId === acc.id}
-                      disconnectLoading={disconnectingId === acc.id}
-                    />
-                  ))}
-                </div>
-              </GlowCard>
-            )}
-
-            {/* ── Available Platforms ── */}
+          accounts.length > 0 && (
             <GlowCard className="accounts-section" hover={false}>
               <div className="section-title-row">
-                <h2 className="ds-title">Connect a Platform</h2>
+                <h2 className="ds-title">Connected Accounts ({accounts.length})</h2>
               </div>
-              <div className="platforms-grid">
-                {(unconnectedPlatforms.length > 0 ? unconnectedPlatforms : DEFAULT_PLATFORMS).map((p) => (
+              <div className="accounts-list">
+                {accounts.map((acc) => (
                   <SocialAccountCard
-                    key={p.platform}
-                    platform={p}
-                    isAvailable
-                    onConnect={() => handleOpenConnectModal(p)}
+                    key={acc.id}
+                    account={acc}
+                    onSync={handleSync}
+                    onDisconnect={handleDisconnect}
+                    syncLoading={syncingId === acc.id}
+                    disconnectLoading={disconnectingId === acc.id}
                   />
                 ))}
               </div>
             </GlowCard>
-          </>
+          )
         )}
+
+        {/* ── Available Platforms (Always visible immediately) ── */}
+        <GlowCard className="accounts-section" hover={false}>
+          <div className="section-title-row">
+            <h2 className="ds-title">Connect a Platform</h2>
+          </div>
+          <div className="platforms-grid">
+            {(unconnectedPlatforms.length > 0 ? unconnectedPlatforms : DEFAULT_PLATFORMS).map((p) => (
+              <SocialAccountCard
+                key={p.platform}
+                platform={p}
+                isAvailable
+                onConnect={() => handleOpenConnectModal(p)}
+              />
+            ))}
+          </div>
+        </GlowCard>
 
         {/* ── Step-by-Step Dummy Connection Modal ── */}
         {connectModalPlatform && (

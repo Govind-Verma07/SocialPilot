@@ -8,13 +8,21 @@
 
 import axios from 'axios'
 
-const baseURL = import.meta.env.VITE_API_BASE_URL
-  ? `${import.meta.env.VITE_API_BASE_URL}/api/v1`
-  : '/api/v1'
+const getBaseURL = () => {
+  const envUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_BACKEND_URL || ''
+  if (!envUrl) return '/api/v1'
+  const trimmed = envUrl.replace(/\/+$/, '')
+  if (trimmed.endsWith('/api/v1')) return trimmed
+  if (trimmed.endsWith('/api')) return `${trimmed}/v1`
+  return `${trimmed}/api/v1`
+}
+
+const baseURL = getBaseURL()
 
 const api = axios.create({
   baseURL,
   headers: { 'Content-Type': 'application/json' },
+  timeout: 10000,
 })
 
 // ── Request: inject Bearer token ────────────────────────────────────────────
@@ -48,6 +56,7 @@ export const authApi = {
   updateProfile:  (data) => api.patch('/users/me', data),
   getSettings:    ()     => api.get('/users/me/settings'),
   updateSettings: (data) => api.put('/users/me/settings', data),
+  resetPassword:  (data) => api.post('/auth/reset-password', data),
 }
 
 export default api

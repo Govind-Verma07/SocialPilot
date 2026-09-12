@@ -66,19 +66,25 @@ export function AuthProvider({ children }) {
   const login = useCallback(async ({ email, password }) => {
     setLoading(true)
     try {
-      const { data } = await authApi.login({ email, password })
+      const cleanEmail = (email || '').trim().toLowerCase()
+      const { data } = await authApi.login({ email: cleanEmail, password })
       const token = data.access_token ?? data.accessToken ?? data.token
-      const userData = data.user ?? { email }
+      const userData = data.user ?? { email: cleanEmail }
       if (token) localStorage.setItem('sp_access_token', token)
       localStorage.setItem('sp_user', JSON.stringify(userData))
       setUser(userData)
       return { success: true }
     } catch (err) {
-      const message =
-        err.response?.data?.detail ??
-        err.response?.data?.message ??
-        err.response?.data?.error ??
-        'Invalid email or password.'
+      let message = 'Invalid email or password.'
+      if (err.response?.data?.detail) {
+        message = err.response.data.detail
+      } else if (err.response?.data?.message) {
+        message = err.response.data.message
+      } else if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+        message = 'Login request timed out. Please check your network and try again.'
+      } else if (err.message?.includes('Network Error') || !err.response) {
+        message = 'Cannot connect to backend server. Please verify the server is running.'
+      }
       return { success: false, message }
     } finally {
       setLoading(false)
