@@ -259,10 +259,10 @@ export default function DashboardPage() {
                       <div
                         key={post.id}
                         className="db-post-row"
-                        onClick={() => navigate('/posts')}
+                        onClick={() => navigate(`/posts?tab=queue&postId=${post.id}`)}
                         role="button"
                         tabIndex={0}
-                        onKeyDown={(e) => e.key === 'Enter' && navigate('/posts')}
+                        onKeyDown={(e) => e.key === 'Enter' && navigate(`/posts?tab=queue&postId=${post.id}`)}
                       >
                         <div className="db-post-left">
                           <div className="db-post-icon">

@@ -763,6 +763,49 @@
   font-weight: 500;
 }
 
+/* Calendar Badge Status Colors (Bug 4) */
+.calendar-post-badge.status-published {
+  background: rgba(16, 185, 129, 0.18);
+  border-color: rgba(16, 185, 129, 0.45);
+  color: #e2e8f0;
+}
+.calendar-post-badge.status-published:hover {
+  background: rgba(16, 185, 129, 0.28);
+  border-color: #10b981;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.28);
+}
+.calendar-post-badge.status-published .calendar-post-badge-time {
+  color: #34d399;
+}
+
+.calendar-post-badge.status-scheduled {
+  background: rgba(245, 158, 11, 0.18);
+  border-color: rgba(245, 158, 11, 0.45);
+  color: #e2e8f0;
+}
+.calendar-post-badge.status-scheduled:hover {
+  background: rgba(245, 158, 11, 0.28);
+  border-color: #f59e0b;
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.28);
+}
+.calendar-post-badge.status-scheduled .calendar-post-badge-time {
+  color: #fbbf24;
+}
+
+.calendar-post-badge.status-draft {
+  background: rgba(148, 163, 184, 0.15);
+  border-color: rgba(148, 163, 184, 0.35);
+  color: #e2e8f0;
+}
+.calendar-post-badge.status-draft:hover {
+  background: rgba(148, 163, 184, 0.25);
+  border-color: #94a3b8;
+  box-shadow: 0 4px 12px rgba(148, 163, 184, 0.2);
+}
+.calendar-post-badge.status-draft .calendar-post-badge-time {
+  color: #94a3b8;
+}
+
 /* Post Details Modal */
 .modal-backdrop {
   position: fixed;
@@ -1207,6 +1250,27 @@
 .scheduled-post-row-card:hover {
   border-color: rgba(124, 58, 237, 0.5);
   transform: translateY(-1px);
+}
+
+.scheduled-post-row-card.highlighted-queue-card {
+  border-color: #8b5cf6 !important;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.45), 0 8px 28px rgba(139, 92, 246, 0.3) !important;
+  animation: queueCardPulse 3s ease-out forwards;
+}
+
+@keyframes queueCardPulse {
+  0% {
+    transform: scale(1.015);
+    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.65), 0 8px 30px rgba(139, 92, 246, 0.4);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.35), 0 8px 24px rgba(139, 92, 246, 0.2);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  }
 }
 
 .scheduled-post-meta-left {

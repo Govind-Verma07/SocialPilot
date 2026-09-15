@@ -33,6 +33,7 @@ class MediaItemOut(BaseModel):
     mime_type: str
     size_bytes: int
     download_url: str
+    public_url: Optional[str] = None
     width: Optional[int] = None
     height: Optional[int] = None
     duration_seconds: Optional[float] = None

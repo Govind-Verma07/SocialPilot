@@ -328,7 +328,7 @@ export default function GlobalSearch({ isMobileOpen, onCloseMobileSearch }) {
         title: (p.content || 'Scheduled Post').slice(0, 75),
         subtitle: `Scheduled for ${p.scheduled_at ? new Date(p.scheduled_at).toLocaleString() : 'queue'}`,
         category: 'Scheduled Posts',
-        path: '/posts?tab=queue',
+        path: `/posts?tab=queue&postId=${p.id}`,
         icon: Clock,
         badge: 'Scheduled',
       }))
@@ -346,7 +346,7 @@ export default function GlobalSearch({ isMobileOpen, onCloseMobileSearch }) {
         title: (p.content || 'Published Post').slice(0, 75),
         subtitle: `Published • ${p.published_at ? new Date(p.published_at).toLocaleDateString() : 'Done'}`,
         category: 'Published Posts',
-        path: '/posts',
+        path: `/posts?tab=queue&postId=${p.id}`,
         icon: FileText,
         badge: 'Published',
       }))

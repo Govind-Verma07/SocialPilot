@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.db.mongodb import get_content_posts_collection, get_media_assets_collection
+from app.services.media_service import MediaService
 
 
 class ContentPostService:
@@ -117,6 +118,7 @@ class ContentPostService:
                         "mime_type": asset.get("mime_type", ""),
                         "size_bytes": asset.get("size_bytes", 0),
                         "download_url": f"/api/v1/media/{m_id}/download",
+                        "public_url": asset.get("public_url") or MediaService.get_public_media_url(m_id),
                         "width": asset.get("width"),
                         "height": asset.get("height"),
                         "duration_seconds": asset.get("duration_seconds"),
@@ -130,6 +132,7 @@ class ContentPostService:
                         "mime_type": "",
                         "size_bytes": 0,
                         "download_url": f"/api/v1/media/{m_id}/download",
+                        "public_url": MediaService.get_public_media_url(m_id) if m_id else None,
                     })
             doc["media_items"] = populated_items
 

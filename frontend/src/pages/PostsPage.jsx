@@ -17,6 +17,8 @@ import StatusBadge from '../components/ui/StatusBadge'
 import EmptyState from '../components/ui/EmptyState'
 import postsApi from '../api/postsApi'
 import socialApi from '../api/socialApi'
+import { resolveMediaUrl } from '../utils/mediaUtils'
+import { getBackendBaseURL } from '../api/authApi'
 import './PostsPage.css'
 
 const PLATFORM_META = {
@@ -71,9 +73,16 @@ export default function PostsPage() {
     }
   }, [searchParams])
 
+  const [highlightedPostId, setHighlightedPostId] = useState(null)
+
   const handleTabSwitch = (tab) => {
     setActiveTab(tab)
     setSearchParams({ tab })
+    if (tab === 'calendar') {
+      loadCalendarPosts()
+    } else if (tab === 'queue') {
+      loadQueuePosts()
+    }
   }
 
   // Real backend data states
@@ -306,16 +315,19 @@ export default function PostsPage() {
 
   // 5. Fetch posts for the active calendar date range
   const loadCalendarPosts = useCallback(async () => {
+    const token = localStorage.getItem('sp_access_token')
+    if (!token) return
+
     setIsLoadingCalendar(true)
     setCalendarError('')
     try {
       const res = await postsApi.getPosts({
-        status: 'scheduled',
         start_date: rangeStart.toISOString(),
         end_date: rangeEnd.toISOString(),
         limit: 200,
       })
-      setCalendarPosts(res.data?.items || [])
+      const items = res.data?.items || []
+      setCalendarPosts(items.filter((p) => p.scheduled_at || p.published_at))
     } catch (err) {
       console.error('Failed to load calendar posts:', err)
       setCalendarError('Unable to load scheduled posts. Please try again.')
@@ -324,16 +336,65 @@ export default function PostsPage() {
     }
   }, [rangeStart, rangeEnd])
 
+  const scrollToQueuePost = useCallback((postId) => {
+    if (!postId) return
+
+    setActiveTab('queue')
+    setSearchParams((prev) => {
+      const p = new URLSearchParams(prev)
+      p.set('tab', 'queue')
+      p.set('postId', postId)
+      return p
+    })
+
+    setQueueStatusFilter((prevFilter) => {
+      const targetPost = scheduledPosts.find((p) => p.id === postId)
+      if (!targetPost) return 'all'
+      if (prevFilter === 'all') return prevFilter
+      if (prevFilter === 'scheduled' && targetPost.status !== 'scheduled' && targetPost.status !== 'publishing') {
+        return 'all'
+      }
+      if (prevFilter === 'published' && targetPost.status !== 'published') {
+        return 'all'
+      }
+      if (prevFilter === 'failed' && targetPost.status !== 'failed') {
+        return 'all'
+      }
+      return prevFilter
+    })
+
+    setHighlightedPostId(postId)
+
+    setTimeout(() => {
+      const el = document.getElementById(`post-${postId}`) || document.querySelector(`[data-post-id="${postId}"]`)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+    }, 120)
+
+    setTimeout(() => {
+      setHighlightedPostId((prev) => (prev === postId ? null : prev))
+    }, 3000)
+  }, [scheduledPosts, setSearchParams])
+
   useEffect(() => {
     loadAccounts()
     loadQueuePosts()
     loadDraftPosts()
     loadRecurringRules()
+    loadCalendarPosts()
   }, [])
 
   useEffect(() => {
     loadCalendarPosts()
   }, [loadCalendarPosts])
+
+  useEffect(() => {
+    const postIdParam = searchParams.get('postId')
+    if (postIdParam && scheduledPosts.length > 0) {
+      scrollToQueuePost(postIdParam)
+    }
+  }, [searchParams, scheduledPosts.length, scrollToQueuePost])
 
   // 1. Upcoming scheduled queue (waiting to be published, newest created/scheduled on top)
   const upcomingQueuePosts = useMemo(() => {
@@ -512,9 +573,29 @@ export default function PostsPage() {
       const contentRes = await postsApi.getPostContent(draft.id)
       if (contentRes.data?.media_items?.length > 0) {
         setUploadedMedia(contentRes.data.media_items)
+      } else if (draft.media_urls && draft.media_urls.length > 0) {
+        setUploadedMedia(draft.media_urls.map((url, idx) => ({
+          media_id: (draft.media_ids && draft.media_ids[idx]) || `url_${idx + 1}`,
+          position: idx + 1,
+          preview_url: url,
+          public_url: url,
+          download_url: url,
+          media_type: draft.post_type === 'video' ? 'video' : 'image',
+          original_filename: `media_${idx + 1}`,
+        })))
       }
-    } catch (e) {
-      // no mongo content yet or text post
+    } catch (_) {
+      if (draft.media_urls && draft.media_urls.length > 0) {
+        setUploadedMedia(draft.media_urls.map((url, idx) => ({
+          media_id: (draft.media_ids && draft.media_ids[idx]) || `url_${idx + 1}`,
+          position: idx + 1,
+          preview_url: url,
+          public_url: url,
+          download_url: url,
+          media_type: draft.post_type === 'video' ? 'video' : 'image',
+          original_filename: `media_${idx + 1}`,
+        })))
+      }
     }
     setErrorMessage('')
     setSuccessMessage('')
@@ -869,14 +950,28 @@ export default function PostsPage() {
   const postsByDate = useMemo(() => {
     const map = {}
     calendarPosts.forEach((p) => {
-      if (!p.scheduled_at) return
-      const d = new Date(p.scheduled_at)
+      const dateToUse = p.scheduled_at || p.published_at
+      if (!dateToUse) return
+      const d = new Date(dateToUse)
       const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
       if (!map[key]) map[key] = []
       map[key].push(p)
     })
     return map
   }, [calendarPosts])
+
+  // Determine calendar badge status styling (Bug 4)
+  const getCalendarPostStatusClass = (post) => {
+    if (!post) return 'status-scheduled'
+    const rawStatus = (post.status || '').toLowerCase()
+    if (rawStatus === 'published' || rawStatus === 'completed' || Boolean(post.published_at)) {
+      return 'status-published'
+    }
+    if (rawStatus === 'draft') {
+      return 'status-draft'
+    }
+    return 'status-scheduled'
+  }
 
   // Formatted calendar header title
   const calendarTitle = useMemo(() => {
@@ -890,7 +985,7 @@ export default function PostsPage() {
     }
   }, [currentDate, calendarView, rangeStart, rangeEnd])
 
-  const renderPostRowCard = (post, isPublishedSection = false) => {
+  const renderPostRowCard = (post, _isPublishedSection = false) => {
     const scheduledDateFormatted = post.scheduled_at
       ? new Date(post.scheduled_at).toLocaleString(undefined, {
           month: 'short',
@@ -916,13 +1011,16 @@ export default function PostsPage() {
     const isPublished = post.status === 'published'
     const isFailed = post.status === 'failed'
     const isPublishing = post.status === 'publishing'
+    const isHighlighted = highlightedPostId === post.id
 
     return (
       <div
         key={post.id}
+        id={`post-${post.id}`}
+        data-post-id={post.id}
         className={`scheduled-post-row-card ${
           isPublished ? 'published-card' : isFailed ? 'failed-card' : 'scheduled-card'
-        }`}
+        } ${isHighlighted ? 'highlighted-queue-card' : ''}`}
       >
         {/* Left Block: Icon + Details + Chips + Time */}
         <div className="scheduled-post-meta-left">
@@ -1403,7 +1501,7 @@ export default function PostsPage() {
                         // Single Hero Preview for Image / Video / Story / Reel
                         uploadedMedia.map((item) => {
                           const isVideo = item.media_type === 'video' || item.mime_type?.startsWith('video/')
-                          const dlUrl = item.preview_url || `/api/v1/media/${item.media_id}/download`
+                          const dlUrl = resolveMediaUrl(item)
 
                           return (
                             <div key={item.media_id || 'single'} className="media-hero-card">
@@ -1422,8 +1520,12 @@ export default function PostsPage() {
                                     className="media-hero-media media-hero-img"
                                     onError={(e) => {
                                       const token = localStorage.getItem('sp_access_token')
-                                      if (token && !e.target.src.includes('token=')) {
-                                        e.target.src = `/api/v1/media/${item.media_id}/download?token=${encodeURIComponent(token)}`
+                                      const base = getBackendBaseURL()
+                                      const mId = item.media_id
+                                      if (mId && token && !e.target.src.includes('token=')) {
+                                        e.target.src = `${base}/api/v1/media/${mId}/download?token=${encodeURIComponent(token)}`
+                                      } else {
+                                        e.target.onerror = null
                                       }
                                     }}
                                   />
@@ -1485,7 +1587,7 @@ export default function PostsPage() {
                         <div className="carousel-slides-grid">
                           {uploadedMedia.map((item, idx) => {
                             const isVideo = item.media_type === 'video' || item.mime_type?.startsWith('video/')
-                            const dlUrl = item.preview_url || `/api/v1/media/${item.media_id}/download`
+                            const dlUrl = resolveMediaUrl(item)
 
                             return (
                               <div key={item.media_id || idx} className="carousel-slide-card">
@@ -1504,8 +1606,12 @@ export default function PostsPage() {
                                       className="carousel-slide-media"
                                       onError={(e) => {
                                         const token = localStorage.getItem('sp_access_token')
-                                        if (token && !e.target.src.includes('token=')) {
-                                          e.target.src = `/api/v1/media/${item.media_id}/download?token=${encodeURIComponent(token)}`
+                                        const base = getBackendBaseURL()
+                                        const mId = item.media_id
+                                        if (mId && token && !e.target.src.includes('token=')) {
+                                          e.target.src = `${base}/api/v1/media/${mId}/download?token=${encodeURIComponent(token)}`
+                                        } else {
+                                          e.target.onerror = null
                                         }
                                       }}
                                     />
@@ -1992,17 +2098,20 @@ export default function PostsPage() {
                     {/* Render Events */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
                       {dayPosts.map((post) => {
-                        const postTime = new Date(post.scheduled_at).toLocaleTimeString(undefined, {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })
+                        const postDate = post.scheduled_at || post.published_at
+                        const postTime = postDate
+                          ? new Date(postDate).toLocaleTimeString(undefined, {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })
+                          : ''
 
                         return (
                           <div
                             key={post.id}
-                            className="calendar-post-badge"
-                            onClick={() => setSelectedPost(post)}
-                            title="Click to view full post details"
+                            className={`calendar-post-badge ${getCalendarPostStatusClass(post)}`}
+                            onClick={() => scrollToQueuePost(post.id)}
+                            title="Click to view in Scheduled/Queued Posts"
                           >
                             <div className="calendar-post-badge-time">
                               <span>🕒 {postTime}</span>
@@ -2302,7 +2411,7 @@ export default function PostsPage() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '16px' }}>
                 {uploadedMedia.map((item, idx) => {
                   const isVideo = item.media_type === 'video' || item.mime_type?.startsWith('video/')
-                  const dlUrl = item.preview_url || `/api/v1/media/${item.media_id}/download`
+                  const dlUrl = resolveMediaUrl(item)
 
                   return (
                     <GlowCard key={item.media_id || idx} hover style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -2335,7 +2444,9 @@ export default function PostsPage() {
                             onError={(e) => {
                               const token = localStorage.getItem('sp_access_token')
                               if (token && !e.target.src.includes('token=')) {
-                                e.target.src = `/api/v1/media/${item.media_id}/download?token=${encodeURIComponent(token)}`
+                                const base = getBackendBaseURL()
+                                e.target.onerror = null
+                                e.target.src = `${base}/api/v1/media/${item.media_id}/download?token=${encodeURIComponent(token)}`
                               }
                             }}
                           />
@@ -2662,6 +2773,18 @@ export default function PostsPage() {
                       }}
                     >
                       ✏️ Edit Draft
+                    </Button>
+                  )}
+                  {selectedPost.status !== 'draft' && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        const targetId = selectedPost.id
+                        setSelectedPost(null)
+                        scrollToQueuePost(targetId)
+                      }}
+                    >
+                      📋 View in Queue
                     </Button>
                   )}
                   <Button variant="primary" onClick={() => setSelectedPost(null)}>

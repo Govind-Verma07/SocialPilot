@@ -8,7 +8,13 @@
 
 import axios from 'axios'
 
-const getBaseURL = () => {
+export const getBackendBaseURL = () => {
+  const envUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_BACKEND_URL || ''
+  if (!envUrl) return ''
+  return envUrl.replace(/\/+$/, '').replace(/\/api(\/v1)?$/, '')
+}
+
+export const getBaseURL = () => {
   const envUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_BACKEND_URL || ''
   if (!envUrl) return '/api/v1'
   const trimmed = envUrl.replace(/\/+$/, '')

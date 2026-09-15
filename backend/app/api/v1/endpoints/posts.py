@@ -378,6 +378,7 @@ def list_posts(
 
 @router.get("/calendar", response_model=PostListResponse, status_code=status.HTTP_200_OK)
 def get_calendar_posts(
+    status_filter: Optional[str] = Query(None, alias="status", description="Filter by status (optional)"),
     start_date: Optional[str] = Query(None, description="Start date/time for range filter"),
     end_date: Optional[str] = Query(None, description="End date/time for range filter"),
     limit: int = Query(200, ge=1, le=500),
@@ -387,7 +388,7 @@ def get_calendar_posts(
 ) -> PostListResponse:
     """Convenience alias endpoint for calendar posts."""
     return list_posts(
-        status_filter="scheduled",
+        status_filter=status_filter,
         start_date=start_date,
         end_date=end_date,
         limit=limit,
@@ -671,18 +672,49 @@ async def get_post_content(
 
     if not content_doc:
         # Fallback synthesizing from PostgreSQL post
+        media_items = []
+        if post.media_urls:
+            for idx, u in enumerate(post.media_urls, start=1):
+                u_str = str(u)
+                is_vid = any(u_str.lower().endswith(ext) for ext in (".mp4", ".mov", ".webm", ".avi", ".mkv"))
+                media_items.append({
+                    "media_id": f"url_{idx}",
+                    "position": idx,
+                    "media_type": "video" if is_vid else "image",
+                    "original_filename": f"media_{idx}",
+                    "mime_type": "video/mp4" if is_vid else "image/jpeg",
+                    "size_bytes": 0,
+                    "download_url": u_str,
+                    "public_url": u_str,
+                })
         content_doc = {
             "post_id": post.id,
             "user_id": post.user_id,
             "post_type": post.post_type or "text",
             "text": post.content,
             "media_ids": [],
-            "media_items": [],
+            "media_items": media_items,
             "metadata": {},
             "status": post.status.value if hasattr(post.status, "value") else str(post.status),
             "created_at": post.created_at,
             "updated_at": post.updated_at,
         }
+    elif not content_doc.get("media_items") and post.media_urls:
+        media_items = []
+        for idx, u in enumerate(post.media_urls, start=1):
+            u_str = str(u)
+            is_vid = any(u_str.lower().endswith(ext) for ext in (".mp4", ".mov", ".webm", ".avi", ".mkv"))
+            media_items.append({
+                "media_id": f"url_{idx}",
+                "position": idx,
+                "media_type": "video" if is_vid else "image",
+                "original_filename": f"media_{idx}",
+                "mime_type": "video/mp4" if is_vid else "image/jpeg",
+                "size_bytes": 0,
+                "download_url": u_str,
+                "public_url": u_str,
+            })
+        content_doc["media_items"] = media_items
 
     return PostContentDetailResponse(**content_doc)
 
