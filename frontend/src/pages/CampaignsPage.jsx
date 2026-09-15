@@ -7,8 +7,8 @@
  */
 
 import { useState } from 'react'
-import Sidebar from '../components/Sidebar'
-import Navbar from '../components/Navbar'
+import { useNavigate } from 'react-router-dom'
+import AppShell from '../components/AppShell'
 import GlowCard from '../components/ui/GlowCard'
 import Button from '../components/ui/Button'
 import StatusBadge from '../components/ui/StatusBadge'
@@ -67,9 +67,13 @@ const INITIAL_CAMPAIGNS = [
 ]
 
 export default function CampaignsPage() {
-  const [mobileNav, setMobileNav] = useState(false)
+  const navigate = useNavigate()
   const [campaigns, setCampaigns] = useState(INITIAL_CAMPAIGNS)
   const [showCreateModal, setShowCreateModal] = useState(false)
+
+  const handleDeleteCampaign = (campaignId) => {
+    setCampaigns((prev) => prev.filter((c) => c.id !== campaignId))
+  }
 
   // Selected Social Media Accounts (default: all)
   const [selectedPlatforms, setSelectedPlatforms] = useState(ALL_PLATFORMS.map((p) => p.id))
@@ -157,17 +161,7 @@ export default function CampaignsPage() {
   }
 
   return (
-    <div className="app-layout body-bg">
-      <Sidebar mobileOpen={mobileNav} onCloseMobile={() => setMobileNav(false)} />
-
-      <main className="app-main">
-        <Navbar
-          pageTitle="Campaign Management Module"
-          pageSubtitle="Create, track, and monitor social campaign objectives, budgets, and performance metrics"
-          mobileMenuLabel="Open menu"
-          onMobileMenu={() => setMobileNav(true)}
-        />
-
+    <AppShell pageTitle="Campaigns" pageSubtitle="Create, track, and monitor social campaign objectives and performance">
         {/* Top Header Row */}
         <div className="campaigns-top-bar">
           <div>
@@ -422,11 +416,31 @@ export default function CampaignsPage() {
                     <span className="metric-txt">ROI</span>
                   </div>
                 </div>
+
+                {/* Campaign Actions */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '12px', borderTop: '1px solid rgba(255, 255, 255, 0.06)', marginTop: '4px' }}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate('/posts?tab=create')}
+                    title="Schedule a post for this campaign"
+                  >
+                    + Schedule Post
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDeleteCampaign(cmp.id)}
+                    style={{ color: '#ef4444', padding: '4px 8px' }}
+                    title="Delete this campaign"
+                  >
+                    🗑️ Delete
+                  </Button>
+                </div>
               </GlowCard>
             ))}
           </div>
         )}
-      </main>
-    </div>
+    </AppShell>
   )
 }

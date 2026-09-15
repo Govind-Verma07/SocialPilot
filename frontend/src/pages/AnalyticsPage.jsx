@@ -6,14 +6,12 @@
  */
 
 import { useState } from 'react'
-import Sidebar from '../components/Sidebar'
-import Navbar from '../components/Navbar'
+import AppShell from '../components/AppShell'
 import GlowCard from '../components/ui/GlowCard'
 import Button from '../components/ui/Button'
 import './AnalyticsPage.css'
 
 export default function AnalyticsPage() {
-  const [mobileNav, setMobileNav] = useState(false)
   const [exportNotice, setExportNotice] = useState('')
 
   const handleExportPDF = () => {
@@ -45,17 +43,7 @@ export default function AnalyticsPage() {
   ]
 
   return (
-    <div className="app-layout body-bg">
-      <Sidebar mobileOpen={mobileNav} onCloseMobile={() => setMobileNav(false)} />
-
-      <main className="app-main">
-        <Navbar
-          pageTitle="Analytics Dashboard & Reports Module"
-          pageSubtitle="Track engagement, reach, impressions, audience growth, and export PDF/Excel reports"
-          mobileMenuLabel="Open menu"
-          onMobileMenu={() => setMobileNav(true)}
-        />
-
+    <AppShell pageTitle="Analytics" pageSubtitle="Track engagement, reach, impressions, and audience growth">
         {/* Top Header Row with PDF & Excel Export Buttons */}
         <div className="analytics-top-bar">
           <div>
@@ -196,7 +184,6 @@ export default function AnalyticsPage() {
             </tbody>
           </table>
         </GlowCard>
-      </main>
-    </div>
+    </AppShell>
   )
 }

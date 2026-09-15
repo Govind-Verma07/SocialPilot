@@ -105,7 +105,10 @@ def test_force_publish_now(client, db_session):
     db_session.commit()
 
     # User clicks Publish Now
-    res = client.post(f"/api/v1/posts/{post.id}/publish", headers=headers)
+    mock_resp = httpx.Response(200, json={"id": "fb_force_123"}, request=httpx.Request("POST", "https://graph.facebook.com"))
+    with patch.object(httpx.AsyncClient, "post", new_callable=AsyncMock, return_value=mock_resp):
+        res = client.post(f"/api/v1/posts/{post.id}/publish", headers=headers)
+
     assert res.status_code == 200
     data = res.json()
     assert data["status"] == "published"

@@ -28,16 +28,23 @@ class PostCreate(BaseModel):
     status: Optional[str] = Field("scheduled", description="draft or scheduled")
     post_type: Optional[str] = Field("text", description="Format: text, image, video, carousel, story, reel")
     media_urls: Optional[List[str]] = Field(default_factory=list)
+    media_ids: Optional[List[str]] = Field(default_factory=list, description="List of media_id UUIDs from MongoDB media_assets")
+    media_items: Optional[List[dict]] = Field(default_factory=list, description="Explicitly ordered list: [{media_id, position}]")
+    metadata: Optional[dict] = Field(default_factory=dict, description="Generic & platform overrides metadata")
 
     @model_validator(mode="after")
     def validate_lifecycle_rules(self):
         post_status = (self.status or "scheduled").lower()
+        p_type = (self.post_type or "text").lower()
 
         if post_status == "scheduled":
             # 1. Content validation
-            if not self.content or not self.content.strip():
-                raise ValueError("Post content is required.")
-            self.content = self.content.strip()
+            has_media = bool(self.media_ids or self.media_items)
+            if p_type == "text" or not has_media:
+                if not self.content or not self.content.strip():
+                    raise ValueError("Post content is required.")
+            if self.content:
+                self.content = self.content.strip()
 
             # 2. Social accounts validation
             if not self.social_account_ids or len(self.social_account_ids) == 0:
@@ -67,6 +74,9 @@ class PostUpdate(BaseModel):
     status: Optional[str] = None
     post_type: Optional[str] = None
     media_urls: Optional[List[str]] = None
+    media_ids: Optional[List[str]] = None
+    media_items: Optional[List[dict]] = None
+    metadata: Optional[dict] = None
 
 
 class PublishResultResponse(BaseModel):
@@ -137,6 +147,9 @@ class PostResponse(BaseModel):
     team_id: Optional[str] = None
     content: str
     media_urls: Optional[List[str]] = []
+    media_ids: Optional[List[str]] = []
+    media_items: Optional[List[dict]] = []
+    metadata: Optional[dict] = {}
     post_type: str = "text"
     status: str
     scheduled_at: Optional[datetime] = None

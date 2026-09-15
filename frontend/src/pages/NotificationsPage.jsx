@@ -6,10 +6,11 @@
  */
 
 import { useState } from 'react'
-import Sidebar from '../components/Sidebar'
-import Navbar from '../components/Navbar'
+import { useNavigate } from 'react-router-dom'
+import AppShell from '../components/AppShell'
 import GlowCard from '../components/ui/GlowCard'
 import Button from '../components/ui/Button'
+import EmptyState from '../components/ui/EmptyState'
 import './NotificationsPage.css'
 
 const INITIAL_NOTIFICATIONS = [
@@ -52,7 +53,7 @@ const INITIAL_NOTIFICATIONS = [
 ]
 
 export default function NotificationsPage() {
-  const [mobileNav, setMobileNav] = useState(false)
+  const navigate = useNavigate()
   const [filter, setFilter] = useState('all')
   const [notifs, setNotifs] = useState(INITIAL_NOTIFICATIONS)
 
@@ -63,16 +64,7 @@ export default function NotificationsPage() {
   const filteredNotifs = notifs.filter((n) => filter === 'all' || n.type === filter)
 
   return (
-    <div className="app-layout body-bg">
-      <Sidebar mobileOpen={mobileNav} onCloseMobile={() => setMobileNav(false)} />
-
-      <main className="app-main">
-        <Navbar
-          pageTitle="Notifications & Alert Operations"
-          pageSubtitle="Scheduled post reminders, publishing logs, campaign alerts, and team collaboration updates"
-          mobileMenuLabel="Open menu"
-          onMobileMenu={() => setMobileNav(true)}
-        />
+    <AppShell pageTitle="Notifications" pageSubtitle="Post reminders, publishing logs, campaign alerts, and team updates">
 
         <div className="posts-header-row">
           <div className="notifs-filter-row">
@@ -113,29 +105,39 @@ export default function NotificationsPage() {
           </Button>
         </div>
 
-        <div className="notifs-list">
-          {filteredNotifs.map((n) => (
-            <GlowCard
-              key={n.id}
-              className="notif-card"
-              style={{
-                background: n.unread ? 'rgba(124, 58, 237, 0.08)' : undefined,
-                border: n.unread ? '1px solid rgba(124, 58, 237, 0.3)' : undefined,
-              }}
-              hover
-            >
-              <div className="notif-icon-box">{n.icon}</div>
-              <div className="notif-content">
-                <div className="notif-title">
-                  {n.title} {n.unread && <span style={{ color: '#10b981', fontSize: '10px' }}>● NEW</span>}
+        {filteredNotifs.length === 0 ? (
+          <EmptyState
+            icon="🔔"
+            title="No notifications in this category"
+            description="All notifications for this filter have been addressed or none have been logged yet."
+            actionLabel="Schedule a Post"
+            onAction={() => navigate('/posts?tab=create')}
+            size="md"
+          />
+        ) : (
+          <div className="notifs-list">
+            {filteredNotifs.map((n) => (
+              <GlowCard
+                key={n.id}
+                className="notif-card"
+                style={{
+                  background: n.unread ? 'rgba(124, 58, 237, 0.08)' : undefined,
+                  border: n.unread ? '1px solid rgba(124, 58, 237, 0.3)' : undefined,
+                }}
+                hover
+              >
+                <div className="notif-icon-box">{n.icon}</div>
+                <div className="notif-content">
+                  <div className="notif-title">
+                    {n.title} {n.unread && <span style={{ color: '#10b981', fontSize: '10px' }}>● NEW</span>}
+                  </div>
+                  <div className="notif-desc">{n.desc}</div>
+                  <div className="notif-time">{n.time}</div>
                 </div>
-                <div className="notif-desc">{n.desc}</div>
-                <div className="notif-time">{n.time}</div>
-              </div>
-            </GlowCard>
-          ))}
-        </div>
-      </main>
-    </div>
+              </GlowCard>
+            ))}
+          </div>
+        )}
+    </AppShell>
   )
 }

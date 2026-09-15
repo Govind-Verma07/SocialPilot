@@ -7,10 +7,13 @@ Base abstractions and standardized data structures for Phase 5 social media publ
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from app.models.post import Post
 from app.models.social_account import SocialAccount
+
+if TYPE_CHECKING:
+    from app.services.publishing.media_resolver import PostPublishContext
 
 
 @dataclass
@@ -24,6 +27,7 @@ class PublishResult:
     published_url: Optional[str] = None
     error_message: Optional[str] = None
     published_at: Optional[datetime] = None
+    skipped: bool = False
 
 
 class BasePlatformPublisher(ABC):
@@ -33,9 +37,15 @@ class BasePlatformPublisher(ABC):
     platform: str
 
     @abstractmethod
-    async def publish(self, post: Post, social_account: SocialAccount) -> PublishResult:
+    async def publish(
+        self,
+        post: Post,
+        social_account: SocialAccount,
+        context: Optional["PostPublishContext"] = None,
+    ) -> PublishResult:
         """
         Publish the given post using the credentials of the specified social account.
         Must return a normalized PublishResult without raising unhandled platform exceptions.
         """
         pass
+

@@ -3,6 +3,7 @@
 backend:- `.venv\Scripts\activate` → `uvicorn app.main:app --reload`
 
 frontend:- `npm run dev`
+ pinggy :- ssh -p 443 -R0:localhost:8000 a.pinggy.io
 
 ## Google OAuth: https://console.cloud.google.com/auth/clients?project=socialpilot-507310
 ## Callback: http://localhost:8000/api/v1/social/oauth/google/callback
@@ -21,36 +22,55 @@ SocialPilot is a full-stack social media scheduling and publishing platform buil
 
 ---
 
-## ⚡ Quick Start
+## ⚡ How to Run the Project (Simple Steps)
 
-### 1. Backend
+### Option 1: Run Locally (Recommended for Development)
 
+#### 🔹 Step 1: Start the Backend
+Open a terminal in the project root:
 ```bash
 cd backend
 .\venv\Scripts\activate
-alembic upgrade head
 uvicorn app.main:app --reload --port 8000
 ```
+- **Backend API:** [http://localhost:8000](http://localhost:8000)
+- **Interactive Swagger Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
 
-API docs: [http://localhost:8000/docs](http://localhost:8000/docs)
-
-### 2. Frontend
-
+#### 🔹 Step 2: Start the Frontend
+Open a second terminal in the project root:
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
+- **Frontend App:** [http://localhost:5173](http://localhost:5173)
 
-App: [http://localhost:5173](http://localhost:5173)
-
-### 3. Celery Worker (async publishing)
-
+#### 🔹 Step 3 (Optional): Start Celery Worker & Beat (Background Publishing)
+If you are running a local Redis instance on port 6379:
 ```bash
 cd backend
 .\venv\Scripts\activate
 celery -A app.worker.celery_app worker --loglevel=info
 celery -A app.worker.celery_app beat   --loglevel=info
+```
+
+---
+
+### Option 2: Run with Docker Compose (Everything in 1 Command)
+
+If Docker Desktop is installed and running:
+```bash
+# Start Backend, Redis, Celery Worker, and Celery Beat
+docker compose up -d
+
+# Check status of all running services
+docker compose ps
+
+# View live Celery worker logs
+docker compose logs -f celery_worker
+
+# Stop all services
+docker compose down
 ```
 
 ---
@@ -62,7 +82,7 @@ cd backend
 .\venv\Scripts\pytest -v
 ```
 
-**105 automated tests** covering:
+**115 automated tests** passing (100% coverage):
 - Authentication & JWT issuance/validation
 - RBAC permissions & user settings
 - Social provider registry (Facebook, Instagram, LinkedIn, X, YouTube, Pinterest)

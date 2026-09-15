@@ -30,7 +30,7 @@ class FacebookProvider(BaseSocialProvider):
             "client_id": settings.FACEBOOK_CLIENT_ID,
             "redirect_uri": redirect_uri,
             "state": state,
-            "scope": "pages_show_list,pages_read_engagement,pages_manage_posts,public_profile,email",
+            "scope": "pages_show_list,pages_read_engagement,pages_manage_posts,public_profile",
             "response_type": "code",
         }
         return f"{self.AUTH_URL}?{urlencode(params)}"
@@ -55,7 +55,7 @@ class FacebookProvider(BaseSocialProvider):
 
     async def fetch_profile(self, access_token: str) -> Dict[str, Any]:
         params = {
-            "fields": "id,name,picture.type(large),email",
+            "fields": "id,name,picture.type(large)",
             "access_token": access_token,
         }
         async with httpx.AsyncClient() as client:

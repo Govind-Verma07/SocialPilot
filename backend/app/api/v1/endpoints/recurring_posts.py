@@ -96,7 +96,7 @@ def _serialize_recurring_rule(rule: RecurringRule, include_occurrences: bool = F
 
 
 @router.post("", response_model=RecurringRuleResponse, status_code=status.HTTP_201_CREATED)
-def create_recurring_rule(
+async def create_recurring_rule(
     payload: RecurringPostCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -147,11 +147,21 @@ def create_recurring_rule(
         )
 
     try:
+        from app.services.media_service import MediaService
+        from app.db.mongodb import get_mongo_db
+        from app.services.content_post_service import ContentPostService
+
+        media_urls = list(payload.media_urls or [])
+        effective_media_ids = list(payload.media_ids or [])
+        effective_media_items = list(payload.media_items or [])
+        if not media_urls and effective_media_ids:
+            media_urls = [MediaService.get_public_media_url(mid) for mid in effective_media_ids]
+
         # 3. Create RecurringRule record
         rule = RecurringRule(
             user_id=current_user.id,
             content=payload.content.strip(),
-            media_urls=payload.media_urls or [],
+            media_urls=media_urls,
             post_type=payload.post_type or "text",
             frequency=payload.frequency.lower(),
             interval=payload.interval,
@@ -180,7 +190,7 @@ def create_recurring_rule(
             post = Post(
                 user_id=current_user.id,
                 content=payload.content.strip(),
-                media_urls=payload.media_urls or [],
+                media_urls=media_urls,
                 post_type=payload.post_type or "text",
                 status=PostStatus.scheduled.value,
                 scheduled_at=occ_time,
@@ -199,6 +209,25 @@ def create_recurring_rule(
 
         db.commit()
         db.refresh(rule)
+
+        # Sync occurrences to MongoDB content_posts
+        mongo_db = get_mongo_db()
+        if mongo_db is not None and (effective_media_ids or effective_media_items):
+            for post in created_posts:
+                try:
+                    await ContentPostService.upsert_content_post(
+                        db=mongo_db,
+                        post_id=post.id,
+                        user_id=current_user.id,
+                        post_type=post.post_type,
+                        text=post.content,
+                        media_ids=effective_media_ids,
+                        media_items=effective_media_items,
+                        metadata={},
+                        status=post.status.value if hasattr(post.status, "value") else str(post.status),
+                    )
+                except Exception as mongo_err:
+                    pass
 
         return RecurringRuleResponse(**_serialize_recurring_rule(rule, include_occurrences=True, db=db))
 

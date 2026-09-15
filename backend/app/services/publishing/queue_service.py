@@ -297,6 +297,13 @@ def recalculate_post_status(db: Session, post_id: str) -> str:
         post.status = PostStatus.failed.value
     elif any(s == PublishingJobStatus.cancelled.value for s in statuses):
         post.status = PostStatus.failed.value
+    elif any(s == PublishingJobStatus.published.value for s in statuses):
+        post.status = PostStatus.published.value
+        if not post.published_at:
+            post.published_at = now
+    else:
+        # All jobs skipped
+        post.status = PostStatus.failed.value
 
     post.updated_at = now
     db.commit()
@@ -305,11 +312,36 @@ def recalculate_post_status(db: Session, post_id: str) -> str:
 
 
 async def _execute_job_async(db: Session, job: PublishingJob, post: Post, account: SocialAccount) -> PublishResult:
-    """Helper to run platform publisher adapter for a single account."""
+    """Helper to run platform publisher adapter for a single account with resolved media context."""
+    from app.services.publishing.media_resolver import resolve_post_publish_context
     platform_str = account.platform.value if hasattr(account.platform, "value") else str(account.platform)
     try:
+        context = await resolve_post_publish_context(db, post)
+
+        p_type = (context.post_type or post.post_type or "text").lower().strip()
+        media_count = context.media_count
+
+        logger.info(
+            f"Queue job #{job.id} pre-check: post_id={post.id}, post_type={p_type}, media_count={media_count}, "
+            f"media_ids={[m.media_id for m in context.media_items]}, "
+            f"resolved_media_types={[m.media_type for m in context.media_items]}"
+        )
+
+        if p_type in ("image", "video", "carousel", "story", "reel") and media_count == 0:
+            return PublishResult(
+                success=False,
+                platform=platform_str,
+                error_message=f"Pipeline error: Post format '{p_type.upper()}' requires media attachments, but resolved media_count is 0.",
+            )
+        if p_type == "carousel" and media_count < 2:
+            return PublishResult(
+                success=False,
+                platform=platform_str,
+                error_message=f"Pipeline error: Carousel format requires at least 2 media items, but resolved media_count is {media_count}.",
+            )
+
         publisher = get_publisher(platform_str)
-        return await publisher.publish(post, account)
+        return await publisher.publish(post, account, context=context)
     except Exception as exc:
         return PublishResult(
             success=False,
@@ -400,7 +432,12 @@ def execute_publishing_job(db: Session, job_id: str) -> dict:
     finally:
         loop.close()
 
-    status_str = "published" if publish_res.success else "failed"
+    if getattr(publish_res, "skipped", False):
+        status_str = "skipped"
+    elif publish_res.success:
+        status_str = "published"
+    else:
+        status_str = "failed"
 
     # Persist or update PostPublishResult for Phase 5 result tracking
     result_record = (
@@ -431,7 +468,23 @@ def execute_publishing_job(db: Session, job_id: str) -> dict:
         if publish_res.success:
             result_record.published_at = publish_res.published_at or now
 
-    if publish_res.success:
+    if getattr(publish_res, "skipped", False):
+        job.status = PublishingJobStatus.skipped.value
+        job.last_error = publish_res.error_message
+        job.next_retry_at = None
+        logger.info(f"Job #{job_id} on {platform_str} skipped: {publish_res.error_message}")
+        create_publishing_log(
+            db,
+            post_id=post.id,
+            platform=platform_str,
+            event_type=PublishingLogEventType.skipped.value,
+            status=PublishingJobStatus.skipped.value,
+            publishing_job_id=job.id,
+            social_account_id=account.id,
+            attempt_number=job.attempt_count,
+            error_message=publish_res.error_message,
+        )
+    elif publish_res.success:
         job.status = PublishingJobStatus.published.value
         job.last_error = None
         job.next_retry_at = None
@@ -498,6 +551,13 @@ def execute_publishing_job(db: Session, job_id: str) -> dict:
 
     # Re-evaluate post overall status
     post_status = recalculate_post_status(db, post.id)
+
+    # Generate and persist rich audit log to disk and cache
+    try:
+        from app.services.publishing.log_generator import generate_post_audit_log_content
+        generate_post_audit_log_content(db, post)
+    except Exception as log_exc:
+        logger.warning(f"Could not generate log for post #{post.id}: {log_exc}")
 
     return {
         "job_id": job.id,

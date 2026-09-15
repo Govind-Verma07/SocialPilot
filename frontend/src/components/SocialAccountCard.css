@@ -1,179 +1,323 @@
-/* SocialAccountCard.css — unified platform & account cards */
-.social-card {
+/* SocialAccountCard.css — Modern Responsive Social Platform Cards */
+
+.sp-account-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 22px;
+  border-radius: var(--radius-xl);
+  background: hsl(var(--card) / 0.7);
+  border: 1px solid hsl(var(--border));
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  position: relative;
+  overflow: hidden;
+  transition: all var(--dur-normal) var(--ease-default);
+  min-height: 240px;
+}
+
+.sp-account-card:hover {
+  border-color: hsl(var(--primary) / 0.35);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25), 0 0 20px hsl(var(--primary) / 0.1);
+}
+
+/* ── Top Header Row ────────────────────────────────────────── */
+.sp-account-card-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 20px 24px;
-  border-radius: var(--radius-lg);
-  background: rgba(15, 18, 38, 0.5);
-  border: 1px solid rgba(124, 58, 237, 0.12);
-  transition: all var(--dur-normal) var(--ease-default);
-  position: relative;
-  overflow: hidden;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
-.social-card::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: var(--radius-lg);
-  padding: 1px;
-  background: linear-gradient(145deg, rgba(124,58,237,0.2), rgba(6,182,212,0.1));
-  -webkit-mask:
-    linear-gradient(#0a0d1a, #0a0d1a) content-box,
-    linear-gradient(#0a0d1a, #0a0d1a);
-  -webkit-mask-composite: destination-out;
-          mask-composite: destination-out;
-  opacity: 0;
-  transition: opacity var(--dur-normal) var(--ease-default);
-  pointer-events: none;
-}
-
-.social-card:hover::before {
-  opacity: 0.4;
-}
-
-.social-card:hover {
-  border-color: rgba(124, 58, 237, 0.35);
-  transform: translateY(-2px);
-  box-shadow: 0 0 24px rgba(124, 58, 237, 0.15);
-}
-
-.social-card-left {
+.sp-platform-badge {
   display: flex;
   align-items: center;
-  gap: 16px;
-  flex: 1;
-  min-width: 0;
+  gap: 8px;
 }
 
-.social-card-platform-icon {
-  font-size: 28px;
-  flex-shrink: 0;
+.sp-platform-badge-icon {
+  font-size: 20px;
+  line-height: 1;
 }
 
-.social-card-avatar {
+.sp-platform-badge-name {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: hsl(var(--foreground));
+}
+
+/* ── Status Pill ───────────────────────────────────────────── */
+.sp-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sp-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.sp-status-badge--success {
+  background: hsl(var(--success) / 0.15);
+  color: hsl(var(--success));
+  border: 1px solid hsl(var(--success) / 0.35);
+}
+
+.sp-status-badge--disconnected {
+  background: hsl(var(--muted) / 0.6);
+  color: hsl(var(--muted-foreground));
+  border: 1px solid hsl(var(--border));
+}
+
+.sp-status-badge--error {
+  background: hsl(var(--destructive) / 0.15);
+  color: hsl(var(--destructive));
+  border: 1px solid hsl(var(--destructive) / 0.35);
+}
+
+/* ── Account Body ──────────────────────────────────────────── */
+.sp-account-card-body {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.sp-account-avatar-wrapper {
+  position: relative;
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: var(--grad-accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 22px;
   border: 2px solid;
   flex-shrink: 0;
-  overflow: hidden;
+  background: hsl(var(--card));
 }
 
-.social-card-avatar-img {
+.sp-account-avatar-img {
   width: 100%;
   height: 100%;
   border-radius: 50%;
   object-fit: cover;
 }
 
-.social-card-info {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  flex: 1;
-}
-
-.social-card-header-row {
+.sp-account-avatar-fallback {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 2px;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
 }
 
-.social-card-name {
-  font-weight: 600;
-  font-size: 15px;
-  color: var(--clr-text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.social-card-status {
+.sp-account-platform-mini {
+  position: absolute;
+  bottom: -3px;
+  right: -3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 10px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 9999px;
-  display: inline-flex;
+  border: 2px solid hsl(var(--card));
+}
+
+.sp-account-placeholder-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
   align-items: center;
-  gap: 3px;
-  white-space: nowrap;
+  justify-content: center;
+  font-size: 22px;
+  border: 2px dashed;
   flex-shrink: 0;
 }
 
-.social-card-status-dot {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: currentColor;
+.sp-account-details {
+  flex: 1;
+  min-width: 0;
 }
 
-.social-card-username {
-  font-size: 12px;
-  color: var(--clr-text-secondary);
+.sp-account-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: hsl(var(--foreground));
+  letter-spacing: -0.01em;
+  margin: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.social-card-synced {
-  font-size: 11px;
-  color: var(--clr-text-muted);
+.sp-account-subtitle {
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
   margin-top: 2px;
+  margin-bottom: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.social-card-permissions {
+.sp-account-desc {
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+  line-height: 1.45;
+  margin: 0 0 16px 0;
+}
+
+/* ── Sync Timestamp Meta ────────────────────────────────────── */
+.sp-account-sync-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+  margin-bottom: 12px;
+}
+
+.sp-sync-clock-icon {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+/* ── Permissions Pills ─────────────────────────────────────── */
+.sp-account-permissions {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 4px;
+  gap: 6px;
+  margin-bottom: 16px;
 }
 
-.social-card-permission {
-  background: rgba(99, 102, 241, 0.12);
-  color: #a5b4fc;
-  border-radius: 4px;
-  padding: 2px 6px;
+.sp-permission-pill {
   font-size: 10px;
-  font-weight: 500;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: hsl(var(--primary) / 0.1);
+  color: hsl(var(--primary));
+  border: 1px solid hsl(var(--primary) / 0.2);
   white-space: nowrap;
 }
 
-.social-card-warning {
-  font-size: 11px;
-  color: #fbbf24;
-  margin-top: 2px;
+/* ── Card Footer & Action Buttons ──────────────────────────── */
+.sp-account-card-footer {
   display: flex;
+  gap: 10px;
   align-items: center;
-  gap: 3px;
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid hsl(var(--border) / 0.6);
 }
 
-.social-card-actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
+.sp-btn-sync {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 12px;
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  font-weight: 600;
+  background: hsl(var(--muted) / 0.4);
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border));
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease-default);
 }
 
-.social-card-disconnect {
-  color: #f87171;
-  border-color: rgba(239, 68, 68, 0.2);
+.sp-btn-sync:hover:not(:disabled) {
+  background: hsl(var(--muted));
+  border-color: hsl(var(--primary) / 0.4);
 }
 
-.social-card-disconnect:hover {
-  background: rgba(239, 68, 68, 0.1);
-  border-color: #ef4444;
+.sp-btn-sync:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .social-card {
-    transition: none;
+.sp-btn-disconnect {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 12px;
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  font-weight: 600;
+  background: hsl(var(--destructive) / 0.08);
+  color: hsl(var(--destructive));
+  border: 1px solid hsl(var(--destructive) / 0.25);
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease-default);
+}
+
+.sp-btn-disconnect:hover:not(:disabled) {
+  background: hsl(var(--destructive) / 0.18);
+  border-color: hsl(var(--destructive) / 0.5);
+}
+
+.sp-btn-disconnect:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.sp-btn-connect {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease-default);
+}
+
+.sp-btn-connect:hover:not(:disabled) {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.sp-btn-connect:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.sp-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 640px) {
+  .sp-account-card {
+    padding: 16px;
   }
 }

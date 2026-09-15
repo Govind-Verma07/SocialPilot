@@ -1,7 +1,7 @@
 /* AccountsPage.css — accounts-specific styles (master layout in index.css) */
 
 .accounts-section {
-  padding: 28px;
+  padding: 24px;
 }
 
 .accounts-list {
@@ -14,8 +14,8 @@
 .platforms-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 12px;
-  margin-top: 4px;
+  gap: 20px;
+  margin-top: 16px;
 }
 
 /* Status badge used inline on account cards (fallback) */
@@ -37,4 +37,12 @@
   background: currentColor;
 }
 
-
+@media (max-width: 768px) {
+  .accounts-section {
+    padding: 16px 14px;
+  }
+  .platforms-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}

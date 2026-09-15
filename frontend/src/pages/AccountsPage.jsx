@@ -1,15 +1,15 @@
 /**
  * src/pages/AccountsPage.jsx
  * ----------------------------
- * Social Account Management Dashboard with Step-by-Step Dummy Connection Flow.
- * Demonstrates platform selection, username/ID integration, and duplicate ID prevention.
+ * Social Media Accounts & Integrations Dashboard (Milestone 2).
+ * Displays all 6 supported social platforms (Facebook, Instagram, LinkedIn,
+ * X/Twitter, YouTube, Pinterest) with real OAuth connection and account management.
  */
 
 import { useEffect, useState, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import Sidebar from '../components/Sidebar'
-import Navbar from '../components/Navbar'
-import SocialAccountCard from '../components/SocialAccountCard'
+import AppShell from '../components/AppShell'
+import SocialAccountCard, { PLATFORM_META } from '../components/SocialAccountCard'
 import { ToastContainer } from '../components/ui/Toast'
 import LoadingState from '../components/ui/LoadingState'
 import GlowCard from '../components/ui/GlowCard'
@@ -18,58 +18,26 @@ import Modal from '../components/Modal'
 import { socialApi } from '../api/socialApi'
 import './AccountsPage.css'
 
-const PLATFORM_META = {
-  facebook:  { icon: '📘', color: '#1877F2', label: 'Facebook Pages' },
-  instagram: { icon: '📸', color: '#E1306C', label: 'Instagram Business' },
-  linkedin:  { icon: '💼', color: '#0A66C2', label: 'LinkedIn Company' },
-  x:         { icon: '𝕏',  color: '#38bdf8', label: 'X (Twitter)' },
-  youtube:   { icon: '▶️', color: '#FF0000', label: 'YouTube Channel' },
-  pinterest: { icon: '📌', color: '#E60023', label: 'Pinterest Board' },
-}
-
-const DEFAULT_PLATFORMS = [
-  { platform: 'facebook', display_name: 'Facebook Pages', is_configured: true },
-  { platform: 'instagram', display_name: 'Instagram Business', is_configured: true },
-  { platform: 'linkedin', display_name: 'LinkedIn Company', is_configured: true },
-  { platform: 'x', display_name: 'X (Twitter)', is_configured: true },
-  { platform: 'youtube', display_name: 'YouTube Channel', is_configured: true },
-  { platform: 'pinterest', display_name: 'Pinterest Board', is_configured: true },
+const SIX_PLATFORMS = [
+  { platform: 'facebook',  label: 'Facebook',     icon: '📘', color: '#1877F2' },
+  { platform: 'instagram', label: 'Instagram',    icon: '📸', color: '#E1306C' },
+  { platform: 'linkedin',  label: 'LinkedIn',     icon: '💼', color: '#0A66C2' },
+  { platform: 'x',         label: 'X (Twitter)',  icon: '𝕏',  color: '#38bdf8' },
+  { platform: 'youtube',   label: 'YouTube',      icon: '▶️', color: '#FF0000' },
+  { platform: 'pinterest', label: 'Pinterest',    icon: '📌', color: '#E60023' },
 ]
 
 export default function AccountsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const [platforms, setPlatforms]       = useState(DEFAULT_PLATFORMS)
-  
-  // Instant load from sessionStorage cache if available
-  const [accounts, setAccounts]         = useState(() => {
-    try {
-      const cached = sessionStorage.getItem('sp_cached_accounts')
-      return cached ? JSON.parse(cached) : []
-    } catch {
-      return []
-    }
-  })
-  const [loading, setLoading]           = useState(() => {
-    try {
-      const cached = sessionStorage.getItem('sp_cached_accounts')
-      return !cached
-    } catch {
-      return true
-    }
-  })
-  const [toasts, setToasts]             = useState([])
-  const [mobileNav, setMobileNav]       = useState(false)
-  const [syncingId, setSyncingId]       = useState(null)
+  const [accounts, setAccounts] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [toasts, setToasts] = useState([])
+  const [connectingPlatform, setConnectingPlatform] = useState(null)
+  const [syncingId, setSyncingId] = useState(null)
   const [disconnectingId, setDisconnectingId] = useState(null)
+  const [accountToDisconnect, setAccountToDisconnect] = useState(null)
 
-  // Dummy Integration Modal State
-  const [connectModalPlatform, setConnectModalPlatform] = useState(null)
-  const [accountName, setAccountName] = useState('')
-  const [accountUsername, setAccountUsername] = useState('')
-  const [duplicateError, setDuplicateError] = useState('')
-  const [connectingProgress, setConnectingProgress] = useState(false)
-
-  const addToast = useCallback((msg, type = 'info', duration = 4000) => {
+  const addToast = useCallback((msg, type = 'info', duration = 4500) => {
     const id = Date.now().toString()
     setToasts((prev) => [...prev, { id, msg, type, duration }])
   }, [])
@@ -78,276 +46,243 @@ export default function AccountsPage() {
     setToasts((prev) => prev.filter((t) => t.id !== id))
   }, [])
 
-  // Handle OAuth redirect query params
-  useEffect(() => {
-    const connected = searchParams.get('connected')
-    const error     = searchParams.get('error')
-    if (connected) {
-      addToast(`${PLATFORM_META[connected]?.label || connected} connected successfully!`, 'success')
-      setSearchParams({})
-    } else if (error) {
-      addToast(error, 'error')
-      setSearchParams({})
-    }
-  }, [searchParams, setSearchParams, addToast])
-
-  // Load data asynchronously without locking the UI
+  // Load connected accounts from backend API
   const loadData = useCallback(async () => {
-    // 1. Fetch platforms in background (DEFAULT_PLATFORMS already available)
-    socialApi.getPlatforms()
-      .then((res) => {
-        if (res.data && res.data.length > 0) {
-          setPlatforms(res.data)
-        }
-      })
-      .catch(() => {})
-
-    // 2. Fetch fresh accounts
     try {
       const accRes = await socialApi.getAccounts()
       if (accRes.data) {
-        setAccounts(accRes.data)
-        try {
-          sessionStorage.setItem('sp_cached_accounts', JSON.stringify(accRes.data))
-        } catch {}
+        setAccounts(Array.isArray(accRes.data) ? accRes.data : [])
       }
     } catch (err) {
-      console.warn('Could not refresh accounts:', err)
+      console.error('Failed to load accounts:', err)
+      addToast('Failed to load connected social accounts.', 'error')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [addToast])
 
-  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
-  // Open Step-by-Step Integration Modal
-  const handleOpenConnectModal = (platformObj) => {
-    setConnectModalPlatform(platformObj)
-    setAccountName('')
-    setAccountUsername('')
-    setDuplicateError('')
-    setConnectingProgress(false)
-  }
-
-  // Handle Dummy Social Integration Submission
-  const handleDummyConnectSubmit = (e) => {
-    e.preventDefault()
-    const cleanUsername = accountUsername.trim().replace(/^@/, '')
-    if (!cleanUsername) return
-
-    // 1. Check for Duplicate Username / User ID across connected accounts
-    const isDuplicate = accounts.some(
-      (a) => a.account_username && a.account_username.toLowerCase() === cleanUsername.toLowerCase()
-    )
-
-    if (isDuplicate) {
-      setDuplicateError(`⚠️ Account ID / Username "@${cleanUsername}" already connected! Please enter a different User ID.`)
-      return
+  // Handle OAuth redirect return params (?connected=facebook&status=success or ?error=...)
+  useEffect(() => {
+    const connected = searchParams.get('connected')
+    const error = searchParams.get('error')
+    if (connected) {
+      const label = PLATFORM_META[connected.toLowerCase()]?.label || connected
+      addToast(`🎉 ${label} account connected successfully!`, 'success')
+      setSearchParams({})
+      loadData()
+    } else if (error) {
+      addToast(`⚠️ ${error}`, 'error')
+      setSearchParams({})
+      loadData()
     }
+  }, [searchParams, setSearchParams, addToast, loadData])
 
-    setDuplicateError('')
-    setConnectingProgress(true)
+  // Start real OAuth flow for the selected platform
+  const handleConnect = async (platformObj) => {
+    const platformKey = platformObj.platform || platformObj
+    const meta = PLATFORM_META[platformKey] || { label: platformKey }
+    setConnectingPlatform(platformKey)
 
-    // Simulate API Authorization Step
-    setTimeout(() => {
-      const platformKey = connectModalPlatform?.platform || 'facebook'
-      const meta = PLATFORM_META[platformKey] || { label: 'Social' }
+    try {
+      const res = await socialApi.getAuthorizeUrl(platformKey)
+      const data = res.data
 
-      const newAccount = {
-        id: `dummy-${Date.now()}`,
-        platform: platformKey,
-        account_name: accountName.trim() || `${meta.label} Account`,
-        account_username: cleanUsername,
-        status: 'connected',
-        last_synced_at: new Date().toISOString(),
-        permissions: [
-          { id: '1', permission: 'read_insights', granted: true },
-          { id: '2', permission: 'publish_content', granted: true },
-        ],
+      if (data?.authorization_url) {
+        // Redirect browser to provider OAuth consent page
+        window.location.href = data.authorization_url
+        return
       }
 
-      setAccounts((prev) => {
-        const updated = [newAccount, ...prev]
-        try { sessionStorage.setItem('sp_cached_accounts', JSON.stringify(updated)) } catch {}
-        return updated
-      })
-      setConnectingProgress(false)
-      setConnectModalPlatform(null)
-      addToast(`✅ ${meta.label} account "@${cleanUsername}" connected successfully!`, 'success')
-    }, 1200)
-  }
+      if (data && !data.is_configured) {
+        addToast(
+          `⏳ ${data.message || `OAuth credentials for ${meta.label} are not yet configured in backend.`}`,
+          'warning'
+        )
+        return
+      }
 
-  // Sync
-  const handleSync = async (id) => {
-    setSyncingId(id)
-    try {
-      await socialApi.syncAccount(id).catch(() => {})
-      addToast('Account synchronized successfully!', 'success')
-      setAccounts((prev) => {
-        const updated = prev.map((a) => (a.id === id ? { ...a, last_synced_at: new Date().toISOString(), status: 'connected' } : a))
-        try { sessionStorage.setItem('sp_cached_accounts', JSON.stringify(updated)) } catch {}
-        return updated
-      })
-    } catch {
-      addToast('Sync complete.', 'info')
+      addToast(`Could not obtain OAuth authorization URL for ${meta.label}.`, 'error')
+    } catch (err) {
+      console.error('OAuth authorization error:', err)
+      const detail = err.response?.data?.detail || `Failed to initiate OAuth flow for ${meta.label}.`
+      addToast(detail, 'error')
     } finally {
-      setSyncingId(null)
+      setConnectingPlatform(null)
     }
   }
 
-  // Disconnect
-  const handleDisconnect = async (id) => {
-    const account = accounts.find((a) => a.id === id)
-    const meta = PLATFORM_META[account?.platform] || { label: 'account' }
-    if (!window.confirm(`Disconnect ${meta.label} account "${account?.account_name}"?`)) return
+  // Open confirmation modal to disconnect account
+  const handleOpenDisconnectModal = (account) => {
+    setAccountToDisconnect(account)
+  }
+
+  // Execute disconnect using backend DELETE /social/accounts/{id} API
+  const handleConfirmDisconnect = async () => {
+    if (!accountToDisconnect) return
+    const id = accountToDisconnect.id
+    const meta = PLATFORM_META[accountToDisconnect.platform?.toLowerCase()] || { label: 'Social' }
 
     setDisconnectingId(id)
     try {
-      await socialApi.disconnectAccount(id).catch(() => {})
-      setAccounts((prev) => {
-        const updated = prev.filter((a) => a.id !== id)
-        try { sessionStorage.setItem('sp_cached_accounts', JSON.stringify(updated)) } catch {}
-        return updated
-      })
-      addToast(`${meta.label} account disconnected.`, 'info')
-    } catch {
-      setAccounts((prev) => {
-        const updated = prev.filter((a) => a.id !== id)
-        try { sessionStorage.setItem('sp_cached_accounts', JSON.stringify(updated)) } catch {}
-        return updated
-      })
-      addToast('Account disconnected.', 'info')
+      await socialApi.disconnectAccount(id)
+      setAccounts((prev) => prev.filter((a) => a.id !== id))
+      addToast(`${meta.label} account "${accountToDisconnect.account_name}" disconnected successfully.`, 'info')
+      setAccountToDisconnect(null)
+    } catch (err) {
+      const detail = err.response?.data?.detail || 'Failed to disconnect account.'
+      addToast(detail, 'error')
     } finally {
       setDisconnectingId(null)
     }
   }
 
-  // Platforms not yet connected
-  const connectedPlatforms  = new Set(accounts.map((a) => a.platform))
-  const unconnectedPlatforms = platforms.filter((p) => !connectedPlatforms.has(p.platform))
+  // Sync account using backend POST /social/accounts/{id}/sync API
+  const handleSync = async (id) => {
+    setSyncingId(id)
+    try {
+      const res = await socialApi.syncAccount(id)
+      const d = res.data
+      addToast(d.message || 'Account synchronized successfully!', 'success')
+      setAccounts((prev) =>
+        prev.map((a) =>
+          a.id === id
+            ? { ...a, last_synced_at: new Date().toISOString(), status: 'connected' }
+            : a
+        )
+      )
+    } catch (err) {
+      const detail = err.response?.data?.detail || 'Sync failed.'
+      addToast(detail, 'error')
+    } finally {
+      setSyncingId(null)
+    }
+  }
+
+  const connectedCount = accounts.length
 
   return (
-    <div className="app-layout body-bg">
-      <Sidebar mobileOpen={mobileNav} onCloseMobile={() => setMobileNav(false)} />
-
-      <main className="app-main">
-        <Navbar
-          pageTitle="Social Accounts & Integrations"
-          pageSubtitle="Connect and manage your social media profiles across all platforms."
-          mobileMenuLabel="Open menu"
-          onMobileMenu={() => setMobileNav(true)}
-        />
+    <AppShell pageTitle="Social Accounts" pageSubtitle="Connect and manage your channels across all 6 major networks">
 
         <ToastContainer toasts={toasts} onRemove={removeToast} />
 
-        {/* ── Connected Accounts ── */}
-        {loading && accounts.length === 0 ? (
-          <GlowCard className="accounts-section" hover={false}>
-            <div className="section-title-row">
-              <h2 className="ds-title">Connected Accounts</h2>
-            </div>
-            <LoadingState message="Loading your accounts…" size="sm" />
-          </GlowCard>
+        {loading ? (
+          <LoadingState message="Loading social media accounts…" size="lg" />
         ) : (
-          accounts.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            {/* ── 6 Platform Cards Section ── */}
             <GlowCard className="accounts-section" hover={false}>
               <div className="section-title-row">
-                <h2 className="ds-title">Connected Accounts ({accounts.length})</h2>
+                <div>
+                  <h2 className="ds-title">Social Media Platforms ({SIX_PLATFORMS.length})</h2>
+                  <p style={{ color: '#94a3b8', fontSize: '13px', marginTop: '4px' }}>
+                    Connect your authentic accounts via OAuth to enable one-click publishing and scheduled delivery.
+                  </p>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span
+                    style={{
+                      background: connectedCount > 0 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(148, 163, 184, 0.15)',
+                      color: connectedCount > 0 ? '#34d399' : '#94a3b8',
+                      border: `1px solid ${connectedCount > 0 ? 'rgba(16, 185, 129, 0.3)' : 'rgba(148, 163, 184, 0.3)'}`,
+                      padding: '4px 12px',
+                      borderRadius: '9999px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                    }}
+                  >
+                    ● {connectedCount} connected
+                  </span>
+                </div>
               </div>
-              <div className="accounts-list">
-                {accounts.map((acc) => (
-                  <SocialAccountCard
-                    key={acc.id}
-                    account={acc}
-                    onSync={handleSync}
-                    onDisconnect={handleDisconnect}
-                    syncLoading={syncingId === acc.id}
-                    disconnectLoading={disconnectingId === acc.id}
-                  />
-                ))}
+
+              <div className="platforms-grid">
+                {SIX_PLATFORMS.map((platform) => {
+                  const platformAccounts = accounts.filter(
+                    (a) => a.platform?.toLowerCase() === platform.platform.toLowerCase()
+                  )
+
+                  // If not connected, render Disconnected platform card with "Connect Account" button
+                  if (platformAccounts.length === 0) {
+                    return (
+                      <SocialAccountCard
+                        key={platform.platform}
+                        platform={platform}
+                        isAvailable={true}
+                        onConnect={() => handleConnect(platform)}
+                        connectLoading={connectingPlatform === platform.platform}
+                      />
+                    )
+                  }
+
+                  // If connected, render each connected account for this platform
+                  return platformAccounts.map((account) => (
+                    <SocialAccountCard
+                      key={account.id}
+                      platform={platform}
+                      account={account}
+                      isAvailable={false}
+                      onSync={handleSync}
+                      onDisconnect={handleOpenDisconnectModal}
+                      syncLoading={syncingId === account.id}
+                      disconnectLoading={disconnectingId === account.id}
+                    />
+                  ))
+                })}
               </div>
             </GlowCard>
-          )
+          </div>
         )}
 
-        {/* ── Available Platforms (Always visible immediately) ── */}
-        <GlowCard className="accounts-section" hover={false}>
-          <div className="section-title-row">
-            <h2 className="ds-title">Connect a Platform</h2>
-          </div>
-          <div className="platforms-grid">
-            {(unconnectedPlatforms.length > 0 ? unconnectedPlatforms : DEFAULT_PLATFORMS).map((p) => (
-              <SocialAccountCard
-                key={p.platform}
-                platform={p}
-                isAvailable
-                onConnect={() => handleOpenConnectModal(p)}
-              />
-            ))}
-          </div>
-        </GlowCard>
-
-        {/* ── Step-by-Step Dummy Connection Modal ── */}
-        {connectModalPlatform && (
+        {/* ── Disconnect Confirmation Modal ── */}
+        {accountToDisconnect && (
           <Modal
             isOpen={true}
-            onClose={() => setConnectModalPlatform(null)}
-            title={`Connect ${PLATFORM_META[connectModalPlatform.platform]?.label || connectModalPlatform.display_name}`}
+            onClose={() => setAccountToDisconnect(null)}
+            title={`Disconnect ${PLATFORM_META[accountToDisconnect.platform?.toLowerCase()]?.label || 'Social'} Account`}
           >
-            <form onSubmit={handleDummyConnectSubmit} className="auth-form">
-              <p style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '12px' }}>
-                Enter your social account credentials / User ID to simulate step-by-step account integration.
+            <div style={{ padding: '8px 0' }}>
+              <p style={{ color: '#e2e8f0', fontSize: '14px', lineHeight: '1.6', marginBottom: '12px' }}>
+                Are you sure you want to disconnect{' '}
+                <strong>{accountToDisconnect.account_name}</strong>
+                {accountToDisconnect.account_username ? ` (@${accountToDisconnect.account_username})` : ''}?
               </p>
-
-              {duplicateError && (
-                <div className="alert alert-error" style={{ marginBottom: '12px' }}>
-                  <span>⚠️</span>
-                  <span>{duplicateError}</span>
-                </div>
-              )}
-
-              <div className="form-group">
-                <label className="form-label">Account Display Name</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="e.g. Govind Verma Official Page"
-                  value={accountName}
-                  onChange={(e) => {
-                    setAccountName(e.target.value)
-                    setDuplicateError('')
-                  }}
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">User Name / User ID</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="e.g. @govindverma or user_99210"
-                  value={accountUsername}
-                  onChange={(e) => {
-                    setAccountUsername(e.target.value)
-                    setDuplicateError('')
-                  }}
-                  required
-                />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px' }}>
-                <Button type="button" variant="ghost" onClick={() => setConnectModalPlatform(null)}>
+              <p style={{ color: '#94a3b8', fontSize: '13px', lineHeight: '1.5', marginBottom: '24px' }}>
+                This will remove the account from SocialPilot and revoke scheduled post publishing. You can reconnect it via OAuth at any time.
+              </p>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setAccountToDisconnect(null)}
+                  disabled={Boolean(disconnectingId)}
+                >
                   Cancel
                 </Button>
-                <Button type="submit" variant="primary" disabled={connectingProgress}>
-                  {connectingProgress ? 'Connecting to API…' : 'Verify & Connect Account 🚀'}
-                </Button>
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  style={{
+                    background: '#ef4444',
+                    color: '#fff',
+                    border: 'none',
+                    padding: '8px 18px',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                  }}
+                  onClick={handleConfirmDisconnect}
+                  disabled={Boolean(disconnectingId)}
+                >
+                  {disconnectingId ? 'Disconnecting…' : 'Disconnect Account'}
+                </button>
               </div>
-            </form>
+            </div>
           </Modal>
         )}
-      </main>
-    </div>
+    </AppShell>
   )
 }

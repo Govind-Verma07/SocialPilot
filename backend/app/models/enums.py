@@ -80,6 +80,7 @@ class PublishingJobStatus(str, enum.Enum):
     retrying   = "retrying"
     failed     = "failed"
     cancelled  = "cancelled"
+    skipped    = "skipped"
 
 
 class PublishingLogEventType(str, enum.Enum):
@@ -91,6 +92,7 @@ class PublishingLogEventType(str, enum.Enum):
     retrying            = "RETRYING"
     failed              = "FAILED"
     cancelled           = "CANCELLED"
+    skipped             = "SKIPPED"
 
 
 

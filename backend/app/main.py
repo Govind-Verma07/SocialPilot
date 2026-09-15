@@ -47,7 +47,18 @@ async def lifespan(app: FastAPI):
     logger = logging.getLogger("uvicorn.error")
     is_test = "pytest" in sys.modules or os.environ.get("TESTING") == "1"
 
-    # ── PostgreSQL: verify all tables exist (non-blocking) ─────────────
+    # ── MongoDB: connect client & init indexes ──────────────────────────
+    connect_mongodb()
+    try:
+        from app.db.mongodb import get_mongo_db, init_mongodb_indexes
+        mongo_db = get_mongo_db()
+        if mongo_db is not None and not is_test:
+            import asyncio
+            asyncio.create_task(init_mongodb_indexes(mongo_db))
+    except Exception as mongo_idx_exc:
+        logger.warning("Could not schedule MongoDB index creation: %s", mongo_idx_exc)
+
+    # ── PostgreSQL & background services (non-test only) ─────────────
     if not is_test:
         def _init_db():
             try:
@@ -61,27 +72,66 @@ async def lifespan(app: FastAPI):
         import asyncio
         asyncio.create_task(asyncio.to_thread(_init_db))
 
-        # ── MongoDB: connect client ─────────────────────────────────────────
-        connect_mongodb()
+        # ── Automated Background Scheduler (Managed via Celery Beat & Worker) ──
+        if settings.ENABLE_INPROCESS_SCHEDULER:
+            try:
+                from app.services.publishing.scheduler import start_scheduler, stop_scheduler
+                start_scheduler(interval_seconds=15)
+                logger.info("✅ Automated Publishing Scheduler active (in-process fallback, 15s interval).")
+            except Exception as exc:
+                logger.warning(f"⚠️  Could not initialize in-process publishing scheduler: {exc}")
+        else:
+            logger.info("ℹ️  In-process scheduler disabled. Celery Beat + Celery Worker handle scheduled publishing.")
 
-        # ── Automated Background Scheduler (Publishes scheduled posts automatically) ──
+        # ── IPv6 Localhost Bridge for Windows OpenSSH / Pinggy tunnels ────────
+        ipv6_server = None
         try:
-            from app.services.publishing.scheduler import start_scheduler, stop_scheduler
-            start_scheduler(interval_seconds=15)
-            logger.info("✅ Automated Publishing Scheduler active (15s interval).")
+            async def _handle_ipv6_client(reader, writer):
+                try:
+                    target_reader, target_writer = await asyncio.open_connection("127.0.0.1", 8000)
+                except Exception:
+                    writer.close()
+                    return
+                async def _pipe(src, dst):
+                    try:
+                        while True:
+                            data = await src.read(4096)
+                            if not data:
+                                break
+                            dst.write(data)
+                            await dst.drain()
+                    except Exception:
+                        pass
+                    finally:
+                        try:
+                            dst.close()
+                        except Exception:
+                            pass
+                asyncio.create_task(_pipe(reader, target_writer))
+                asyncio.create_task(_pipe(target_reader, writer))
+
+            ipv6_server = await asyncio.start_server(_handle_ipv6_client, "::1", 8000)
+            logger.info("✅ IPv6 localhost bridge active on [::1]:8000 -> 127.0.0.1:8000.")
         except Exception as exc:
-            logger.warning(f"⚠️  Could not initialize automated publishing scheduler: {exc}")
+            logger.debug("IPv6 bridge not started: %s", exc)
 
     yield  # ── Application running ──
 
-    # ── Shutdown: stop scheduler and close MongoDB client ───────────────
+    # ── Shutdown: stop scheduler if active and close MongoDB client ─────
     if not is_test:
-        try:
-            from app.services.publishing.scheduler import stop_scheduler
-            stop_scheduler()
-        except Exception:
-            pass
-        disconnect_mongodb()
+        if ipv6_server is not None:
+            try:
+                ipv6_server.close()
+                await ipv6_server.wait_closed()
+            except Exception:
+                pass
+        if settings.ENABLE_INPROCESS_SCHEDULER:
+            try:
+                from app.services.publishing.scheduler import stop_scheduler
+                stop_scheduler()
+            except Exception:
+                pass
+    disconnect_mongodb()
 
 
 # ---------------------------------------------------------------------------

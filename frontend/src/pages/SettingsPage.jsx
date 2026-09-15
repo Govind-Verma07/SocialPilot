@@ -7,8 +7,8 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { authApi } from '../api/authApi'
-import Sidebar from '../components/Sidebar'
-import Navbar from '../components/Navbar'
+import api from '../api/authApi'
+import AppShell from '../components/AppShell'
 import Button from '../components/ui/Button'
 import GlowCard from '../components/ui/GlowCard'
 import LoadingState from '../components/ui/LoadingState'
@@ -34,7 +34,6 @@ const TIMEZONES = [
 export default function SettingsPage() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
-  const [mobileNav, setMobileNav] = useState(false)
 
   const [settings, setSettings] = useState({
     timezone: 'UTC',
@@ -44,6 +43,27 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
+
+  // Tunnel status state
+  const [tunnelChecking, setTunnelChecking] = useState(false)
+  const [tunnelResult, setTunnelResult] = useState(null)
+
+  const checkTunnel = async () => {
+    setTunnelChecking(true)
+    setTunnelResult(null)
+    try {
+      const { data } = await api.get('/media/check-tunnel')
+      setTunnelResult(data)
+    } catch (err) {
+      setTunnelResult({
+        reachable: false,
+        error: err.response?.data?.detail || err.message || 'Unknown error',
+        recommendation: 'Check that the backend is running and you are logged in.',
+      })
+    } finally {
+      setTunnelChecking(false)
+    }
+  }
 
   useEffect(() => {
     authApi.getSettings()
@@ -91,16 +111,7 @@ export default function SettingsPage() {
     .join(' ')
 
   return (
-    <div className="app-layout body-bg">
-      <Sidebar mobileOpen={mobileNav} onCloseMobile={() => setMobileNav(false)} />
-
-      <main className="app-main">
-        <Navbar
-          pageTitle="Settings"
-          pageSubtitle="Configure application preferences and notification controls."
-          mobileMenuLabel="Open menu"
-          onMobileMenu={() => setMobileNav(true)}
-        />
+    <AppShell pageTitle="Settings" pageSubtitle="Configure your preferences and notification controls">
 
         {loading ? (
           <LoadingState message="Loading preferences…" size="lg" />
@@ -167,6 +178,98 @@ export default function SettingsPage() {
               </form>
             </GlowCard>
 
+            {/* Tunnel Status Diagnostic */}
+            <GlowCard className="settings-card" hover={false}>
+              <h3 className="section-heading">📡 Media Tunnel Status</h3>
+              <p className="section-subheading">
+                Verify that your PUBLIC_BASE_URL tunnel is reachable by external platforms
+                (Instagram, Pinterest). If the tunnel is down, media posts will fail with
+                "Could not fetch media from URI" errors.
+              </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <Button
+                  variant="outline"
+                  size="md"
+                  onClick={checkTunnel}
+                  loading={tunnelChecking}
+                  disabled={tunnelChecking}
+                  id="check-tunnel-btn"
+                >
+                  {tunnelChecking ? 'Checking…' : '🔍 Check Tunnel Connectivity'}
+                </Button>
+
+                {tunnelResult && (
+                  <div
+                    style={{
+                      background: tunnelResult.reachable
+                        ? 'rgba(16,185,129,0.08)'
+                        : 'rgba(239,68,68,0.08)',
+                      border: `1px solid ${
+                        tunnelResult.reachable ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'
+                      }`,
+                      borderRadius: '12px',
+                      padding: '1rem 1.25rem',
+                      fontSize: '0.85rem',
+                      lineHeight: '1.6',
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, marginBottom: '0.5rem', fontSize: '0.95rem' }}>
+                      {tunnelResult.reachable
+                        ? '✅ Tunnel is reachable — Instagram can fetch media'
+                        : '❌ Tunnel is NOT reachable — Instagram will fail'}
+                    </div>
+
+                    {tunnelResult.configured_base_url && (
+                      <div style={{ marginBottom: '0.5rem' }}>
+                        <span style={{ opacity: 0.6 }}>Configured URL: </span>
+                        <code style={{ fontSize: '0.8rem', wordBreak: 'break-all' }}>
+                          {tunnelResult.configured_base_url}
+                        </code>
+                      </div>
+                    )}
+
+                    {tunnelResult.error && (
+                      <div
+                        style={{
+                          color: '#ef4444',
+                          background: 'rgba(239,68,68,0.08)',
+                          borderRadius: '8px',
+                          padding: '0.6rem 0.75rem',
+                          marginBottom: '0.75rem',
+                          fontFamily: 'monospace',
+                          fontSize: '0.8rem',
+                        }}
+                      >
+                        {tunnelResult.error}
+                      </div>
+                    )}
+
+                    {tunnelResult.recommendation && (
+                      <div>
+                        <div style={{ fontWeight: 600, marginBottom: '0.4rem', opacity: 0.8 }}>
+                          💡 How to fix:
+                        </div>
+                        <pre
+                          style={{
+                            background: 'rgba(0,0,0,0.2)',
+                            borderRadius: '8px',
+                            padding: '0.75rem',
+                            overflowX: 'auto',
+                            whiteSpace: 'pre-wrap',
+                            fontSize: '0.78rem',
+                            margin: 0,
+                          }}
+                        >
+                          {tunnelResult.recommendation}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </GlowCard>
+
             {/* Account Info & Security */}
             <GlowCard className="settings-card" hover={false}>
               <h3 className="section-heading">Account & Security</h3>
@@ -199,7 +302,6 @@ export default function SettingsPage() {
             </GlowCard>
           </div>
         )}
-      </main>
-    </div>
+    </AppShell>
   )
 }

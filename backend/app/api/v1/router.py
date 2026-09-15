@@ -21,6 +21,7 @@ from app.api.v1.endpoints.posts import (
     get_scheduled_posts,
 )
 from app.api.v1.endpoints.recurring_posts import router as recurring_posts_router
+from app.api.v1.endpoints.media import router as media_router
 from app.schemas.post import PostListResponse
 
 v1_router = APIRouter()
@@ -30,6 +31,7 @@ v1_router.include_router(users_router, prefix="/users", tags=["Users"])
 v1_router.include_router(teams_router, prefix="/teams", tags=["Teams"])
 v1_router.include_router(social_router, prefix="/social", tags=["Social"])
 v1_router.include_router(posts_router, prefix="/posts", tags=["Posts"])
+v1_router.include_router(media_router, prefix="/media", tags=["Media"])
 v1_router.include_router(recurring_posts_router, prefix="/recurring-posts", tags=["Recurring Posts"])
 
 # Compatibility aliases

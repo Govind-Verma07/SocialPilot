@@ -37,7 +37,21 @@ export const postsApi = {
   getPublishingLogs: (id, params = {}) => api.get(`/posts/${id}/publishing-logs`, { params }),
   exportPublishingLogs: (id) => api.get(`/posts/${id}/publishing-logs/export`, { responseType: 'blob' }),
   getRawPublishingLogs: (id) => api.get(`/posts/${id}/publishing-logs/export`, { responseType: 'text' }),
+
+  // Unified Content & Media Storage API
+  uploadMedia: (file, usageType = 'single', onUploadProgress) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('usage_type', usageType)
+    return api.post('/media/upload', formData, {
+      onUploadProgress,
+    })
+  },
+  getMedia: (mediaId) => api.get(`/media/${mediaId}`),
+  deleteMedia: (mediaId) => api.delete(`/media/${mediaId}`),
+  getPostContent: (id) => api.get(`/posts/${id}/content`),
 }
 
 export default postsApi
+
 

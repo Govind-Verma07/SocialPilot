@@ -13,11 +13,27 @@ const AuthContext = createContext(null)
 
 // ── Provider ─────────────────────────────────────────────────────────────────
 export function AuthProvider({ children }) {
-  const [user, setUser]       = useState(() => {
-    try { return JSON.parse(localStorage.getItem('sp_user')) ?? null }
-    catch { return null }
+  const [user, setUser] = useState(() => {
+    try {
+      const token = localStorage.getItem('sp_access_token')
+      if (!token) return null
+      return JSON.parse(localStorage.getItem('sp_user')) ?? null
+    } catch {
+      return null
+    }
   })
   const [loading, setLoading] = useState(false)
+
+  // Listen for 401 unauthorized events from API interceptor
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      localStorage.removeItem('sp_access_token')
+      localStorage.removeItem('sp_user')
+      setUser(null)
+    }
+    window.addEventListener('auth:unauthorized', handleUnauthorized)
+    return () => window.removeEventListener('auth:unauthorized', handleUnauthorized)
+  }, [])
 
   // On mount, re-validate token with the server if we have one
   useEffect(() => {

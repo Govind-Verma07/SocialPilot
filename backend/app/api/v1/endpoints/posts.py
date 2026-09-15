@@ -9,9 +9,12 @@ Provides:
   DELETE /posts/{id}— Delete a scheduled post.
 """
 
+import logging
 from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+
+logger = logging.getLogger("uvicorn.error")
 
 from sqlalchemy.orm import Session
 
@@ -30,6 +33,10 @@ from app.schemas.post import (
     PublishingLogResponse,
     PublishingLogListResponse,
 )
+from app.db.mongodb import get_mongo_db
+from app.services.media_service import MediaService
+from app.services.content_post_service import ContentPostService
+from app.schemas.media import PostContentDetailResponse
 from app.services.auth_service import get_current_user
 
 router = APIRouter()
@@ -118,6 +125,9 @@ def _serialize_post(post: Post) -> dict:
         "team_id": post.team_id,
         "content": post.content,
         "media_urls": post.media_urls or [],
+        "media_ids": [],
+        "media_items": [],
+        "metadata": {},
         "post_type": post.post_type,
         "status": post_status_val,
         "scheduled_at": sched_at,
@@ -134,7 +144,7 @@ def _serialize_post(post: Post) -> dict:
 
 
 @router.post("", response_model=PostResponse, status_code=status.HTTP_201_CREATED)
-def create_scheduled_post(
+async def create_scheduled_post(
     payload: PostCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -142,26 +152,78 @@ def create_scheduled_post(
     """
     Create a post (either SCHEDULED or DRAFT) for one or more connected social accounts.
     Enforces JWT authentication, content validation, account ownership verification,
-    and future scheduling timestamp validation when scheduling.
+    format-specific media validation, and future scheduling timestamp validation.
+    Stores relational scheduling data in PostgreSQL and unified document data in MongoDB.
     """
     target_status = (payload.status or "scheduled").lower()
+    p_type = (payload.post_type or "text").lower()
 
-    if target_status == "scheduled":
-        # 1. Content validation for scheduled posts
-        if not payload.content or not payload.content.strip():
+    # 1. Structural format-specific media validation
+    effective_media_ids = payload.media_ids or []
+    effective_media_items = payload.media_items or []
+
+    if p_type == "text" and (effective_media_ids or effective_media_items):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Text posts cannot have media attached. Please select Image, Video, or Carousel format.",
+        )
+    if p_type in ("image", "video", "reel", "story", "carousel") and not effective_media_ids and not effective_media_items:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"At least one media asset is required for '{p_type}' posts.",
+        )
+    if p_type in ("video", "reel") and len(effective_media_ids or effective_media_items) > 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Only one video file is allowed for '{p_type}' posts.",
+        )
+    if p_type == "carousel":
+        items_count = len(effective_media_items) if effective_media_items else len(effective_media_ids)
+        if items_count < 2:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Post content is required.",
+                detail="Carousel posts require at least 2 media items.",
+            )
+        if items_count > 10:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Carousel posts cannot exceed 10 media items.",
             )
 
-        # 2. Social accounts validation: at least one account required
+    # 2. Database validation & ownership check for unified content model
+    mongo_db = get_mongo_db()
+    if mongo_db is not None:
+        effective_media_ids, effective_media_items = await MediaService.validate_media_for_post(
+            db=mongo_db,
+            user_id=current_user.id,
+            post_type=p_type,
+            media_ids=effective_media_ids,
+            media_items=effective_media_items,
+        )
+    elif effective_media_ids or effective_media_items:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="MongoDB storage is required to process media posts.",
+        )
+
+    if target_status == "scheduled":
+        # 2. Content validation for scheduled posts
+        has_media = bool(effective_media_ids or effective_media_items)
+        if p_type == "text" or not has_media:
+            if not payload.content or not payload.content.strip():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Post content is required.",
+                )
+
+        # 3. Social accounts validation: at least one account required
         if not payload.social_account_ids:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Please select at least one social account.",
             )
 
-        # 3. Scheduled time required and in future
+        # 4. Scheduled time required and in future
         if not payload.scheduled_at:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -175,7 +237,7 @@ def create_scheduled_post(
                 detail="Scheduled time must be in the future.",
             )
 
-    # 4. Ownership check: all selected accounts must exist and belong to the user
+    # 5. Ownership check: all selected accounts must exist and belong to the user
     verified_accounts = []
     if payload.social_account_ids:
         for acc_id in payload.social_account_ids:
@@ -188,11 +250,15 @@ def create_scheduled_post(
             verified_accounts.append(account)
 
     try:
+        media_urls = list(payload.media_urls or [])
+        if not media_urls and effective_media_ids:
+            media_urls = [MediaService.get_public_media_url(mid) for mid in effective_media_ids]
+
         post = Post(
             user_id=current_user.id,
             content=(payload.content or "").strip(),
-            media_urls=payload.media_urls or [],
-            post_type=payload.post_type or "text",
+            media_urls=media_urls,
+            post_type=p_type,
             status=PostStatus.scheduled.value if target_status == "scheduled" else PostStatus.draft.value,
             scheduled_at=payload.scheduled_at if target_status == "scheduled" else payload.scheduled_at,
         )
@@ -209,12 +275,34 @@ def create_scheduled_post(
         db.commit()
         db.refresh(post)
 
-        return PostResponse(**_serialize_post(post))
+        # Sync unified content document to MongoDB content_posts
+        if mongo_db is not None:
+            try:
+                await ContentPostService.upsert_content_post(
+                    db=mongo_db,
+                    post_id=post.id,
+                    user_id=current_user.id,
+                    post_type=p_type,
+                    text=post.content,
+                    media_ids=effective_media_ids,
+                    media_items=effective_media_items,
+                    metadata=payload.metadata,
+                    status=post.status.value if hasattr(post.status, "value") else str(post.status),
+                )
+            except Exception as mongo_err:
+                logger.warning(f"Could not upsert content_post in MongoDB: {mongo_err}")
+
+        post_dict = _serialize_post(post)
+        post_dict["media_ids"] = effective_media_ids
+        post_dict["media_items"] = effective_media_items
+        post_dict["metadata"] = payload.metadata or {}
+        return PostResponse(**post_dict)
 
     except HTTPException:
         db.rollback()
         raise
     except Exception as exc:
+        logger.exception(f"Error creating post: {exc}")
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -276,7 +364,7 @@ def list_posts(
 
     total = query.count()
     posts = (
-        query.order_by(Post.scheduled_at.asc().nullslast(), Post.created_at.desc())
+        query.order_by(Post.created_at.desc())
         .offset(offset)
         .limit(limit)
         .all()
@@ -373,7 +461,7 @@ def get_post(
 
 
 @router.put("/{post_id}", response_model=PostResponse, status_code=status.HTTP_200_OK)
-def update_post(
+async def update_post(
     post_id: str,
     payload: PostUpdate,
     current_user: User = Depends(get_current_user),
@@ -381,7 +469,7 @@ def update_post(
 ) -> PostResponse:
     """
     Update an existing draft or post. Supports modifying content, target accounts,
-    format, and converting DRAFT -> SCHEDULED.
+    format, media assets, and converting DRAFT -> SCHEDULED.
     """
     post = db.query(Post).filter(Post.id == post_id).first()
     if not post:
@@ -397,15 +485,36 @@ def update_post(
         )
 
     target_status = (payload.status or post.status).lower()
+    p_type = (payload.post_type or post.post_type or "text").lower()
+
+    # Validate media assets if provided
+    mongo_db = get_mongo_db()
+    effective_media_ids = payload.media_ids
+    effective_media_items = payload.media_items
+    if mongo_db is not None and (payload.media_ids is not None or payload.media_items is not None or payload.post_type is not None):
+        if effective_media_ids is None and effective_media_items is None:
+            existing_doc = await ContentPostService.get_content_post(mongo_db, post_id, current_user.id)
+            if existing_doc:
+                effective_media_ids = existing_doc.get("media_ids", [])
+                effective_media_items = existing_doc.get("media_items", [])
+        effective_media_ids, effective_media_items = await MediaService.validate_media_for_post(
+            db=mongo_db,
+            user_id=current_user.id,
+            post_type=p_type,
+            media_ids=effective_media_ids,
+            media_items=effective_media_items,
+        )
 
     if target_status == "scheduled":
         # Validating conversion to or update of scheduled post
         final_content = payload.content if payload.content is not None else post.content
-        if not final_content or not final_content.strip():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Post content is required.",
-            )
+        has_media = bool(effective_media_ids or effective_media_items)
+        if p_type == "text" or not has_media:
+            if not final_content or not final_content.strip():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Post content is required.",
+                )
 
         if payload.social_account_ids is not None:
             target_account_ids = payload.social_account_ids
@@ -476,22 +585,44 @@ def update_post(
         post.post_type = payload.post_type
     if payload.media_urls is not None:
         post.media_urls = payload.media_urls
+    if (not post.media_urls or len(post.media_urls) == 0) and effective_media_ids:
+        post.media_urls = [MediaService.get_public_media_url(mid) for mid in effective_media_ids]
 
     post.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(post)
 
-    return PostResponse(**_serialize_post(post))
+    # Sync to MongoDB content_posts
+    if mongo_db is not None:
+        try:
+            await ContentPostService.upsert_content_post(
+                db=mongo_db,
+                post_id=post.id,
+                user_id=current_user.id,
+                post_type=post.post_type,
+                text=post.content,
+                media_ids=effective_media_ids or [],
+                media_items=effective_media_items or [],
+                metadata=payload.metadata,
+                status=post.status.value if hasattr(post.status, "value") else str(post.status),
+            )
+        except Exception as mongo_err:
+            logger.warning(f"Could not update content_post in MongoDB: {mongo_err}")
+
+    post_dict = _serialize_post(post)
+    post_dict["media_ids"] = effective_media_ids or []
+    post_dict["media_items"] = effective_media_items or []
+    post_dict["metadata"] = payload.metadata or {}
+    return PostResponse(**post_dict)
 
 
 @router.delete("/{post_id}", status_code=status.HTTP_200_OK)
-
-def delete_post(
+async def delete_post(
     post_id: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    """Delete a post owned by the current user."""
+    """Delete a post owned by the current user from PostgreSQL and MongoDB."""
     post = db.query(Post).filter(Post.id == post_id).first()
     if not post:
         raise HTTPException(
@@ -505,9 +636,55 @@ def delete_post(
             detail="You do not have access to this post.",
         )
 
+    # Delete unified document from MongoDB
+    mongo_db = get_mongo_db()
+    if mongo_db is not None:
+        try:
+            await ContentPostService.delete_content_post(mongo_db, post_id, current_user.id)
+        except Exception as mongo_err:
+            logger.warning(f"Could not delete content_post from MongoDB: {mongo_err}")
+
     db.delete(post)
     db.commit()
     return {"message": "Post deleted successfully.", "id": post_id}
+
+
+@router.get("/{post_id}/content", response_model=PostContentDetailResponse, status_code=status.HTTP_200_OK)
+async def get_post_content(
+    post_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PostContentDetailResponse:
+    """
+    Retrieve the rich unified MongoDB content document and populated media assets for a post.
+    """
+    post = db.query(Post).filter(Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found.")
+    if post.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this post.")
+
+    mongo_db = get_mongo_db()
+    content_doc = None
+    if mongo_db is not None:
+        content_doc = await ContentPostService.get_content_post(mongo_db, post_id, current_user.id)
+
+    if not content_doc:
+        # Fallback synthesizing from PostgreSQL post
+        content_doc = {
+            "post_id": post.id,
+            "user_id": post.user_id,
+            "post_type": post.post_type or "text",
+            "text": post.content,
+            "media_ids": [],
+            "media_items": [],
+            "metadata": {},
+            "status": post.status.value if hasattr(post.status, "value") else str(post.status),
+            "created_at": post.created_at,
+            "updated_at": post.updated_at,
+        }
+
+    return PostContentDetailResponse(**content_doc)
 
 
 @router.post("/{post_id}/publish", response_model=PostResponse, status_code=status.HTTP_200_OK)
@@ -538,11 +715,14 @@ async def publish_post_now(
             detail="You do not have permission to publish this post.",
         )
 
-    if not post.content or not post.content.strip():
+    has_media = bool(post.media_urls) or (getattr(post, "post_type", "text") in ("image", "video", "carousel", "story", "reel"))
+    if not has_media and (not post.content or not post.content.strip()):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Post content cannot be empty for publishing.",
         )
+    if not post.content:
+        post.content = ""
 
     if not post.social_accounts or len(post.social_accounts) == 0:
         raise HTTPException(

@@ -1,0 +1,724 @@
+You are redesigning the FRONTEND UI/UX of my existing project:
+
+PROJECT: SocialPilot
+TYPE: Social Media Scheduler & Multi-Platform Campaign Management Platform
+
+REFERENCE DESIGN:
+https://shadcnstore.com/templates/dashboard/shadcn-dashboard-landing-template/landing
+
+The reference is a DESIGN/UX inspiration only.
+
+==================================================
+CRITICAL RULE — DO NOT BREAK FUNCTIONALITY
+==================================================
+
+This is an existing working project.
+
+DO NOT remove, disable, rewrite, replace, or break ANY existing functionality.
+
+The following must continue working exactly as before:
+
+- Authentication
+- Login / Signup
+- User sessions
+- RBAC / permissions
+- Social account connections
+- OAuth flows
+- LinkedIn integration
+- Facebook integration
+- Instagram integration
+- Pinterest integration
+- YouTube integration
+- X/Twitter integration
+- Post creation
+- Text posts
+- Image posts
+- Video posts
+- Carousel posts
+- Story posts
+- Reel posts
+- Media upload
+- MongoDB/GridFS media storage
+- PostgreSQL data
+- Post drafts
+- Post scheduling
+- Recurring posts
+- Publishing queue
+- Background publishing
+- Publishing retries
+- Publishing history
+- Audit logs
+- Calendar
+- Social account management
+- Notifications
+- Existing APIs
+- Existing backend services
+- Existing API request/response structures
+- Existing routes
+- Existing authentication state
+- Existing database models
+- Existing environment variables
+- Existing OAuth redirect URLs
+- Existing publishing adapters
+
+DO NOT modify backend code unless absolutely required for a frontend compatibility issue.
+
+DO NOT change API contracts.
+
+DO NOT change database schemas.
+
+DO NOT change OAuth configuration.
+
+DO NOT change publishing logic.
+
+DO NOT change scheduler/queue behavior.
+
+This is a UI/UX modernization project.
+
+==================================================
+FIRST: INSPECT THE EXISTING FRONTEND
+==================================================
+
+Before changing anything:
+
+1. Inspect the entire frontend.
+2. Identify all existing routes/pages.
+3. Identify all existing components.
+4. Identify existing API calls.
+5. Identify existing state management.
+6. Identify existing forms and validation.
+7. Identify existing modals/dialogs.
+8. Identify existing tables.
+9. Identify existing calendar.
+10. Identify existing composer.
+11. Identify existing analytics pages.
+12. Identify existing social-account pages.
+13. Identify existing publishing-history/audit-log pages.
+
+Create an internal mapping:
+
+CURRENT PAGE → CURRENT FUNCTIONALITY → NEW UI LOCATION
+
+Do not delete functionality just because the reference template does not have an equivalent page.
+
+==================================================
+DESIGN DIRECTION
+==================================================
+
+Use the ShadcnStore reference as the primary visual inspiration.
+
+The final UI should feel like a REAL premium SaaS product.
+
+NOT:
+- generic admin panel
+- basic Bootstrap dashboard
+- plain CRUD interface
+- overly colorful template
+- childish UI
+- excessive gradients
+- excessive shadows
+- random cards everywhere
+
+YES:
+- modern SaaS
+- clean
+- premium
+- professional
+- polished
+- spacious
+- consistent
+- responsive
+- visually distinctive
+- production-ready
+
+Use:
+
+- shadcn/ui
+- Tailwind CSS
+- Radix primitives where appropriate
+- Lucide icons
+- clean typography
+- subtle borders
+- subtle shadows
+- rounded cards
+- consistent spacing
+- professional hover states
+- smooth but restrained animations
+- excellent empty/loading/error states
+
+Use the existing project's compatible frontend stack.
+
+Do NOT migrate the entire application to another framework.
+
+==================================================
+GLOBAL APP SHELL
+==================================================
+
+Create a polished SocialPilot application shell inspired by the reference.
+
+Desktop:
+
+LEFT SIDEBAR
+--------------------------------
+SocialPilot logo / brand
+
+Overview
+Dashboard
+
+Publishing
+- Create Post
+- Posts
+- Calendar
+- Drafts
+- Recurring Posts
+- Publishing Queue
+
+Management
+- Social Accounts
+- Media Library
+- Campaigns
+
+Insights
+- Analytics
+- Reports
+- Audience / Engagement
+
+System
+- Notifications
+- Team / Workspace
+- Settings
+
+BOTTOM SIDEBAR:
+- User avatar
+- User name
+- Workspace/business name
+- Account menu
+
+SIDEBAR REQUIREMENTS:
+- collapsible
+- active route indicator
+- tooltips when collapsed
+- clean icons
+- responsive mobile drawer
+- no unnecessary navigation duplication
+
+TOP BAR
+--------------------------------
+- Global search
+- Quick create button
+- Notifications
+- Theme toggle
+- User menu
+
+==================================================
+DASHBOARD
+==================================================
+
+Redesign the existing dashboard into a premium SocialPilot overview.
+
+Use a structure inspired by the reference:
+
+Header:
+"Good morning, [user]"
+
+Subtitle:
+"Plan, create, publish and grow your social presence from one place."
+
+Top KPI cards using REAL existing backend data.
+
+Examples:
+- Scheduled Posts
+- Published Posts
+- Connected Accounts
+- Engagement
+- Reach
+- Failed Publications
+
+Do NOT invent fake data when real data already exists.
+
+Charts:
+- Publishing activity
+- Engagement trend
+- Platform performance
+- Post status distribution
+
+Schedule preview:
+- Upcoming posts
+- Platform icon
+- Date/time
+- Status
+- Post preview
+
+Recent posts:
+- thumbnail
+- caption/title
+- platform
+- publish date
+- status
+- action menu
+
+Quick actions:
+- Create Post
+- Schedule Post
+- Connect Account
+- View Calendar
+
+==================================================
+CREATE POST / COMPOSER
+==================================================
+
+This is one of the MOST IMPORTANT screens.
+
+Make it visually excellent.
+
+Support ALL existing post types:
+
+- Text
+- Image
+- Video
+- Carousel
+- Story
+- Reel
+
+Do NOT remove any existing composer capability.
+
+Create a polished composer with:
+
+Header:
+"Create Post"
+
+Post type selector:
+Post | Image | Video | Carousel | Story | Reel
+
+Content editor:
+- caption/text
+- character count
+- formatting if currently supported
+- hashtag handling if currently supported
+
+Media area:
+- drag & drop
+- upload
+- previews
+- remove
+- reorder
+- media type indicators
+- upload progress
+- validation states
+
+Platform selector:
+Instagram
+Facebook
+LinkedIn
+Pinterest
+YouTube
+X
+
+Show platform-specific validation/warnings WITHOUT changing backend behavior.
+
+Scheduling section:
+- Publish Now
+- Schedule
+- date
+- time
+- timezone
+- recurring option
+
+Actions:
+- Save Draft
+- Schedule
+- Publish Now
+
+Make the composer feel like a premium social media tool, not a generic form.
+
+==================================================
+CALENDAR
+==================================================
+
+Redesign the existing publishing calendar.
+
+Views:
+- Month
+- Week
+- Day
+- List
+
+Calendar cards should show:
+- media thumbnail
+- post caption preview
+- platform
+- scheduled time
+- status
+
+Use visual status indicators:
+
+Scheduled
+Published
+Failed
+Draft
+
+Allow existing calendar actions to remain functional:
+- open post
+- edit
+- reschedule
+- delete
+- view details
+
+Do NOT change scheduling logic.
+
+==================================================
+POSTS
+==================================================
+
+Create a polished posts management page.
+
+Include:
+
+Search
+Filters
+Platform filter
+Status filter
+Post type filter
+Date filter
+
+Views:
+- Table
+- Grid/List if existing functionality allows
+
+Each post should show:
+- thumbnail
+- caption
+- platforms
+- type
+- schedule
+- status
+- actions
+
+Preserve all existing post actions.
+
+==================================================
+DRAFTS
+==================================================
+
+Use a clean content-library style layout.
+
+Show:
+- thumbnail
+- title/caption
+- post type
+- platforms
+- last updated
+- actions
+
+Empty state should look professional and useful.
+
+==================================================
+MEDIA LIBRARY
+==================================================
+
+Create a premium media management interface.
+
+Show:
+- image/video thumbnails
+- media type
+- filename
+- size
+- upload date
+- usage
+- selection state
+
+Use:
+- grid view
+- list view if appropriate
+- search
+- filters
+
+Preserve existing media APIs and GridFS behavior.
+
+==================================================
+SOCIAL ACCOUNTS
+==================================================
+
+This should look like a polished integrations page.
+
+Each platform card:
+
+Instagram
+Facebook
+LinkedIn
+Pinterest
+YouTube
+X
+
+Show:
+- platform icon
+- connected account
+- connection status
+- profile information if available
+- reconnect
+- disconnect
+- connection action
+
+Use proper brand icons where already available.
+
+Do NOT modify OAuth implementation.
+
+==================================================
+PUBLISHING HISTORY / AUDIT LOG
+==================================================
+
+This page should clearly communicate publishing results.
+
+For each platform:
+
+- platform icon
+- post
+- timestamp
+- attempt
+- status
+- error message
+- published URL
+- media information
+
+Statuses should be visually obvious:
+
+SUCCESS / PUBLISHED
+FAILED
+SKIPPED
+PROCESSING
+SCHEDULED
+
+Make errors readable and professional.
+
+Do NOT hide real API errors.
+
+==================================================
+ANALYTICS
+==================================================
+
+Use the reference template's analytics visual language.
+
+Build the UI around REAL existing analytics data.
+
+Include where supported:
+
+- total posts
+- engagement
+- impressions
+- reach
+- clicks
+- audience growth
+- platform comparison
+- posting activity
+
+Use:
+- KPI cards
+- line charts
+- bar charts
+- donut charts where useful
+- platform comparison cards
+
+Do not fabricate metrics if backend data is unavailable.
+
+If a metric does not currently exist, show a professional empty/coming-data state rather than fake numbers.
+
+==================================================
+NOTIFICATIONS
+==================================================
+
+Redesign existing notification UI.
+
+Include:
+- unread/read state
+- notification type
+- timestamp
+- related post if available
+- mark read
+- clear/read actions if already supported
+
+==================================================
+SETTINGS
+==================================================
+
+Preserve all current settings functionality.
+
+Organize into clean sections:
+
+Profile
+Account
+Appearance
+Notifications
+Social Connections
+Security
+Workspace
+Other existing settings
+
+Use tabs or sidebar settings navigation where appropriate.
+
+==================================================
+RESPONSIVE DESIGN
+==================================================
+
+The application must work properly on:
+
+- Desktop
+- Laptop
+- Tablet
+- Mobile
+
+Desktop:
+sidebar + content
+
+Tablet:
+compact sidebar
+
+Mobile:
+drawer navigation + optimized cards/forms
+
+Composer must remain usable on mobile.
+
+Calendar must remain usable on mobile.
+
+Tables should become responsive cards or horizontal scrolling where appropriate.
+
+==================================================
+DARK MODE
+==================================================
+
+Implement/retain polished dark mode.
+
+Do not simply invert colors.
+
+Use proper:
+- dark surfaces
+- borders
+- text hierarchy
+- muted colors
+- chart visibility
+- hover states
+
+Both light and dark modes must look intentionally designed.
+
+==================================================
+VISUAL QUALITY
+==================================================
+
+Do NOT blindly copy the reference.
+
+Use the reference as the foundation and improve it where SocialPilot needs it.
+
+Add tasteful improvements such as:
+
+- better social platform visual identity
+- richer post previews
+- polished composer
+- better calendar cards
+- meaningful micro-interactions
+- elegant empty states
+- smooth transitions
+- command/search experience if appropriate
+- contextual quick actions
+- clear status badges
+- consistent iconography
+
+The result should look like a product that could realistically be launched as a commercial SaaS.
+
+==================================================
+BRANDING
+==================================================
+
+Use the existing SocialPilot identity.
+
+Do NOT make it look like ShadcnStore.
+
+Reference:
+DESIGN LANGUAGE = ShadcnStore
+PRODUCT IDENTITY = SocialPilot
+
+Use SocialPilot branding, name, logo and product terminology.
+
+==================================================
+IMPORTANT IMPLEMENTATION RULES
+==================================================
+
+Before editing:
+- inspect
+- map
+- reuse existing components where possible
+
+Prefer:
+- refactoring styling
+- reusable UI components
+- shared design tokens
+- shared cards
+- shared buttons
+- shared badges
+- shared dialogs
+- shared platform components
+
+Avoid:
+- duplicated components
+- inline random styling
+- hardcoded fake data
+- breaking existing API calls
+- rewriting working business logic
+
+Do NOT replace working functionality with static mockups.
+
+Every redesigned screen must remain connected to the existing real backend/API.
+
+==================================================
+VALIDATION
+==================================================
+
+After implementation:
+
+1. Run frontend lint.
+2. Run frontend build.
+3. Verify every existing route.
+4. Verify login/logout.
+5. Verify social account pages.
+6. Verify composer.
+7. Verify media upload.
+8. Verify draft creation.
+9. Verify scheduling.
+10. Verify recurring posts.
+11. Verify calendar.
+12. Verify publishing history.
+13. Verify analytics.
+14. Verify notifications.
+15. Verify settings.
+16. Verify dark mode.
+17. Verify responsive layouts.
+
+Most importantly:
+
+Create a regression checklist showing:
+
+FEATURE | BEFORE | AFTER | STATUS
+
+Every existing feature must remain functional after the UI redesign.
+
+If any feature breaks, FIX THE REGRESSION before considering the redesign complete.
+
+==================================================
+FINAL GOAL
+==================================================
+
+Transform the current SocialPilot frontend into a:
+
+PREMIUM
+MODERN
+PROFESSIONAL
+DISTINCTIVE
+SOCIAL-MEDIA-SAAS
+
+experience inspired by the ShadcnStore dashboard reference.
+
+The final website should NOT look generic.
+
+The reference is inspiration, NOT a reason to remove or change any existing SocialPilot functionality.
+
+FUNCTIONALITY FIRST.
+UI SECOND.
+NO REGRESSIONS.

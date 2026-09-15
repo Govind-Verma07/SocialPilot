@@ -29,7 +29,20 @@ const api = axios.create({
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('sp_access_token')
   if (token) {
-    config.headers.Authorization = `Bearer ${token}`
+    if (config.headers?.set) {
+      config.headers.set('Authorization', `Bearer ${token}`)
+    } else {
+      config.headers = config.headers || {}
+      config.headers.Authorization = `Bearer ${token}`
+    }
+  }
+  // If sending FormData, delete Content-Type so browser/Axios sets boundary automatically
+  if (config.data instanceof FormData) {
+    if (config.headers?.delete) {
+      config.headers.delete('Content-Type')
+    } else if (config.headers) {
+      delete config.headers['Content-Type']
+    }
   }
   return config
 })
@@ -41,6 +54,9 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem('sp_access_token')
       localStorage.removeItem('sp_user')
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('auth:unauthorized'))
+      }
     }
     return Promise.reject(error)
   }

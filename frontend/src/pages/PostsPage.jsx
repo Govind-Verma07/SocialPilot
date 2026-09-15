@@ -7,10 +7,10 @@
  * Phase 3: Draft Post Lifecycle (Create, List, Edit, Convert to Scheduled, Delete)
  */
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Link } from 'react-router-dom'
-import Sidebar from '../components/Sidebar'
-import Navbar from '../components/Navbar'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { UploadCloud, Eye, Trash2 } from 'lucide-react'
+import AppShell from '../components/AppShell'
 import GlowCard from '../components/ui/GlowCard'
 import Button from '../components/ui/Button'
 import StatusBadge from '../components/ui/StatusBadge'
@@ -40,9 +40,41 @@ const CONTENT_TYPES = [
 const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 export default function PostsPage() {
-  const [mobileNav, setMobileNav] = useState(false)
-  const [activeTab, setActiveTab] = useState('queue') // 'queue', 'calendar', 'drafts', 'recurring'
-  const [showComposer, setShowComposer] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const initialTab = searchParams.get('tab') || 'queue'
+  const [activeTab, setActiveTab] = useState(
+    initialTab === 'create' ? 'queue' : initialTab
+  )
+  const [queueStatusFilter, setQueueStatusFilter] = useState('all') // 'all', 'scheduled', 'published', 'failed'
+  const [showComposer, setShowComposer] = useState(initialTab === 'create')
+
+  // Sync activeTab and showComposer when URL query parameter changes
+  useEffect(() => {
+    const tabParam = searchParams.get('tab')
+    if (tabParam === 'create') {
+      setShowComposer(true)
+      setActiveTab('queue')
+    } else if (tabParam === 'media') {
+      setActiveTab('media')
+      setShowComposer(false)
+    } else if (tabParam === 'drafts') {
+      setActiveTab('drafts')
+      setShowComposer(false)
+    } else if (tabParam === 'calendar') {
+      setActiveTab('calendar')
+      setShowComposer(false)
+    } else if (tabParam === 'recurring') {
+      setActiveTab('recurring')
+      setShowComposer(false)
+    } else if (tabParam === 'queue') {
+      setActiveTab('queue')
+    }
+  }, [searchParams])
+
+  const handleTabSwitch = (tab) => {
+    setActiveTab(tab)
+    setSearchParams({ tab })
+  }
 
   // Real backend data states
   const [connectedAccounts, setConnectedAccounts] = useState([])
@@ -94,6 +126,86 @@ export default function PostsPage() {
   const [recurrenceMonthDay, setRecurrenceMonthDay] = useState(15)
   const [recurrenceEndDate, setRecurrenceEndDate] = useState('')
 
+  // Unified Content & Media Storage state
+  const [uploadedMedia, setUploadedMedia] = useState([])
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false)
+  const [isDraggingMedia, setIsDraggingMedia] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [mediaError, setMediaError] = useState('')
+  const fileInputRef = useRef(null)
+
+  const handleFileUpload = async (e) => {
+    const files = Array.from(e.target.files || [])
+    if (!files.length) return
+    setMediaError('')
+    setIsUploadingMedia(true)
+    setUploadProgress(0)
+
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        const localPreviewUrl = URL.createObjectURL(file)
+        const usageType = contentType === 'carousel' ? 'carousel' : (contentType === 'story' ? 'story' : (contentType === 'reel' ? 'reel' : (contentType === 'video' ? 'video' : 'single')))
+        const res = await postsApi.uploadMedia(file, usageType, (evt) => {
+          if (evt.total) {
+            setUploadProgress(Math.round((evt.loaded * 100) / evt.total))
+          }
+        })
+        const asset = res.data
+        if (asset) {
+          const itemWithPreview = {
+            ...asset,
+            preview_url: localPreviewUrl,
+          }
+          if (contentType === 'carousel') {
+            setUploadedMedia((prev) => [...prev, { ...itemWithPreview, position: prev.length + 1 }])
+          } else {
+            setUploadedMedia([{ ...itemWithPreview, position: 1 }])
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Media upload error:', err)
+      const detail = err.response?.data?.detail
+      let errorMsg = 'Failed to upload media. Please verify file type and size.'
+      if (typeof detail === 'string') {
+        errorMsg = detail
+      } else if (Array.isArray(detail) && detail.length > 0) {
+        errorMsg = detail.map((d) => d.msg || d.detail || JSON.stringify(d)).join(', ')
+      } else if (err.message) {
+        errorMsg = err.message
+      }
+      setMediaError(errorMsg)
+    } finally {
+      setIsUploadingMedia(false)
+      setUploadProgress(0)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const handleRemoveMedia = (mediaId) => {
+    setUploadedMedia((prev) => {
+      const target = prev.find((m) => m.media_id === mediaId)
+      if (target?.preview_url && target.preview_url.startsWith('blob:')) {
+        try { URL.revokeObjectURL(target.preview_url) } catch (_) {}
+      }
+      const filtered = prev.filter((m) => m.media_id !== mediaId)
+      return filtered.map((m, idx) => ({ ...m, position: idx + 1 }))
+    })
+  }
+
+  const handleMoveMedia = (index, delta) => {
+    setUploadedMedia((prev) => {
+      const copy = [...prev]
+      const targetIndex = index + delta
+      if (targetIndex < 0 || targetIndex >= copy.length) return prev
+      const temp = copy[index]
+      copy[index] = copy[targetIndex]
+      copy[targetIndex] = temp
+      return copy.map((m, idx) => ({ ...m, position: idx + 1 }))
+    })
+  }
+
   // Status & Feedback
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
@@ -119,12 +231,13 @@ export default function PostsPage() {
     }
   }
 
-  // 2. Fetch scheduled posts for queue
+  // 2. Fetch posts for queue (scheduled, published, failed, excluding drafts)
   const loadQueuePosts = async () => {
     setIsLoadingPosts(true)
     try {
-      const res = await postsApi.getPosts({ status: 'scheduled' })
-      setScheduledPosts(res.data?.items || [])
+      const res = await postsApi.getPosts({ limit: 200 })
+      const allItems = res.data?.items || []
+      setScheduledPosts(allItems.filter((p) => p.status !== 'draft'))
     } catch (err) {
       console.error('Failed to load queue posts:', err)
     } finally {
@@ -222,14 +335,26 @@ export default function PostsPage() {
     loadCalendarPosts()
   }, [loadCalendarPosts])
 
-  // Periodic polling so automated background publishing updates UI automatically without manual reload
-  useEffect(() => {
-    const interval = setInterval(() => {
-      loadQueuePosts()
-      loadCalendarPosts()
-    }, 15000)
-    return () => clearInterval(interval)
-  }, [loadCalendarPosts])
+  // 1. Upcoming scheduled queue (waiting to be published, newest created/scheduled on top)
+  const upcomingQueuePosts = useMemo(() => {
+    return scheduledPosts
+      .filter((p) => p.status === 'scheduled' || p.status === 'publishing')
+      .sort((a, b) => new Date(b.created_at || b.scheduled_at || 0) - new Date(a.created_at || a.scheduled_at || 0))
+  }, [scheduledPosts])
+
+  // 2. Force-published & delivered posts (published, latest published on top)
+  const publishedQueuePosts = useMemo(() => {
+    return scheduledPosts
+      .filter((p) => p.status === 'published')
+      .sort((a, b) => new Date(b.published_at || b.updated_at || b.created_at || 0) - new Date(a.published_at || a.updated_at || a.created_at || 0))
+  }, [scheduledPosts])
+
+  // 3. Failed publishing attempts (latest on top)
+  const failedQueuePosts = useMemo(() => {
+    return scheduledPosts
+      .filter((p) => p.status === 'failed')
+      .sort((a, b) => new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0))
+  }, [scheduledPosts])
 
   // Phase 9: Fetch publishing history logs when a post or logs modal is opened
   const loadLogsForModal = async (postId) => {
@@ -367,7 +492,7 @@ export default function PostsPage() {
   }
 
   // Open Composer in Draft Edit Mode
-  const handleEditDraft = (draft) => {
+  const handleEditDraft = async (draft) => {
     setEditingDraftId(draft.id)
     setScheduleType('one-time')
     setContent(draft.content || '')
@@ -381,6 +506,16 @@ export default function PostsPage() {
       setScheduleDate('')
       setScheduleTime('')
     }
+    setUploadedMedia([])
+    setMediaError('')
+    try {
+      const contentRes = await postsApi.getPostContent(draft.id)
+      if (contentRes.data?.media_items?.length > 0) {
+        setUploadedMedia(contentRes.data.media_items)
+      }
+    } catch (e) {
+      // no mongo content yet or text post
+    }
     setErrorMessage('')
     setSuccessMessage('')
     setShowComposer(true)
@@ -389,6 +524,11 @@ export default function PostsPage() {
 
   // Reset composer state
   const handleCancelComposer = () => {
+    uploadedMedia.forEach((m) => {
+      if (m.preview_url && m.preview_url.startsWith('blob:')) {
+        try { URL.revokeObjectURL(m.preview_url) } catch (_) {}
+      }
+    })
     setShowComposer(false)
     setEditingDraftId(null)
     setScheduleType('one-time')
@@ -396,6 +536,9 @@ export default function PostsPage() {
     setScheduleDate('')
     setScheduleTime('')
     setRecurrenceEndDate('')
+    setUploadedMedia([])
+    setUploadProgress(0)
+    setMediaError('')
     setErrorMessage('')
     setSuccessMessage('')
   }
@@ -407,12 +550,18 @@ export default function PostsPage() {
     setIsSubmitting(true)
 
     try {
+      const mediaIds = uploadedMedia.map((m) => m.media_id)
+      const mediaItems = uploadedMedia.map((m, idx) => ({ media_id: m.media_id, position: idx + 1 }))
+      const mediaUrls = uploadedMedia.map((m) => m.public_url || m.download_url).filter(Boolean)
+
       const payload = {
         content: content,
         social_account_ids: selectedAccountIds,
         post_type: contentType,
         status: 'draft',
-        media_urls: [],
+        media_urls: mediaUrls,
+        media_ids: mediaIds,
+        media_items: mediaItems,
       }
 
       if (editingDraftId) {
@@ -441,8 +590,29 @@ export default function PostsPage() {
     setSuccessMessage('')
 
     const trimmedContent = content.trim()
-    if (!trimmedContent) {
-      setErrorMessage('Post content is required.')
+    const hasMedia = uploadedMedia.length > 0
+
+    if (contentType === 'text' || !hasMedia) {
+      if (!trimmedContent) {
+        setErrorMessage('Post content is required.')
+        return
+      }
+    }
+
+    if (contentType === 'image' && !hasMedia) {
+      setErrorMessage('At least one image asset is required for Image Post.')
+      return
+    }
+    if ((contentType === 'video' || contentType === 'reel') && !hasMedia) {
+      setErrorMessage(`A video asset is required for ${contentType === 'reel' ? 'Reel' : 'Video Post'}.`)
+      return
+    }
+    if (contentType === 'carousel' && uploadedMedia.length < 2) {
+      setErrorMessage('Carousel requires at least 2 media items.')
+      return
+    }
+    if (contentType === 'story' && !hasMedia) {
+      setErrorMessage('Media asset is required for Story.')
       return
     }
 
@@ -466,6 +636,10 @@ export default function PostsPage() {
       setErrorMessage(scheduleType === 'recurring' ? 'Start date/time must be in the future.' : 'Scheduled time must be in the future.')
       return
     }
+
+    const mediaIds = uploadedMedia.map((m) => m.media_id)
+    const mediaItems = uploadedMedia.map((m, idx) => ({ media_id: m.media_id, position: idx + 1 }))
+    const mediaUrls = uploadedMedia.map((m) => m.public_url || m.download_url).filter(Boolean)
 
     // Phase 4: Recurring Post Submission
     if (scheduleType === 'recurring' && !editingDraftId) {
@@ -492,7 +666,9 @@ export default function PostsPage() {
           by_weekday: recurrenceFrequency === 'weekly' ? recurrenceWeekday : undefined,
           by_month_day: recurrenceFrequency === 'monthly' ? parseInt(recurrenceMonthDay, 10) : undefined,
           post_type: contentType,
-          media_urls: [],
+          media_urls: mediaUrls,
+          media_ids: mediaIds,
+          media_items: mediaItems,
         }
 
         const res = await postsApi.createRecurringRule(payload)
@@ -525,15 +701,26 @@ export default function PostsPage() {
         scheduled_at: scheduledDateTime.toISOString(),
         post_type: contentType,
         status: 'scheduled',
-        media_urls: [],
+        media_urls: mediaUrls,
+        media_ids: mediaIds,
+        media_items: mediaItems,
       }
 
       if (editingDraftId) {
         // DRAFT -> SCHEDULED conversion (same post record updated)
-        await postsApi.updatePost(editingDraftId, payload)
+        const updateRes = await postsApi.updatePost(editingDraftId, payload)
+        const updated = updateRes.data
+        if (updated) {
+          setScheduledPosts((prev) => [updated, ...prev.filter((p) => p.id !== editingDraftId)])
+          setDraftPosts((prev) => prev.filter((d) => d.id !== editingDraftId))
+        }
         setSuccessMessage(`Draft scheduled successfully for ${scheduledDateTime.toLocaleString()}!`)
       } else {
-        await postsApi.createPost(payload)
+        const createRes = await postsApi.createPost(payload)
+        const created = createRes.data
+        if (created) {
+          setScheduledPosts((prev) => [created, ...prev.filter((p) => p.id !== created.id)])
+        }
         setSuccessMessage(`Post scheduled successfully for ${scheduledDateTime.toLocaleString()}!`)
       }
 
@@ -556,15 +743,16 @@ export default function PostsPage() {
   }
 
   // Handle deleting a recurring rule
-  const handleDeleteRecurringRule = async (ruleId) => {
-    if (!window.confirm('Are you sure you want to delete this recurring schedule? This will also remove all scheduled occurrences created by it.')) return
+  const handleDeleteRule = async (ruleId) => {
     try {
+      setSuccessMessage('Deleting recurring schedule...')
       await postsApi.deleteRecurringRule(ruleId)
       setRecurringRules((prev) => prev.filter((r) => r.id !== ruleId))
       await Promise.all([loadQueuePosts(), loadCalendarPosts()])
+      setSuccessMessage('Recurring schedule deleted successfully. 🗑️')
     } catch (err) {
       console.error('Failed to delete recurring rule:', err)
-      alert(err.response?.data?.detail || 'Failed to delete recurring rule.')
+      setErrorMessage(err.response?.data?.detail || 'Failed to delete recurring rule.')
     }
   }
 
@@ -573,17 +761,18 @@ export default function PostsPage() {
     try {
       await postsApi.updateRecurringRule(rule.id, { is_active: !rule.is_active })
       await loadRecurringRules()
+      setSuccessMessage(`Schedule ${rule.is_active ? 'deactivated' : 'activated'} successfully.`)
     } catch (err) {
       console.error('Failed to update recurring rule:', err)
-      alert(err.response?.data?.detail || 'Failed to update recurring rule.')
+      setErrorMessage(err.response?.data?.detail || 'Failed to update recurring rule.')
     }
   }
 
 
   // Handle deleting a post or draft
   const handleDeletePost = async (postId) => {
-    if (!window.confirm('Are you sure you want to delete this post?')) return
     try {
+      setSuccessMessage('Deleting post...')
       await postsApi.deletePost(postId)
       setScheduledPosts((prev) => prev.filter((p) => p.id !== postId))
       setDraftPosts((prev) => prev.filter((p) => p.id !== postId))
@@ -591,9 +780,10 @@ export default function PostsPage() {
       if (selectedPost && selectedPost.id === postId) {
         setSelectedPost(null)
       }
+      setSuccessMessage('Post deleted successfully. 🗑️')
     } catch (err) {
       console.error('Failed to delete post:', err)
-      alert(err.response?.data?.detail || 'Failed to delete post.')
+      setErrorMessage(err.response?.data?.detail || 'Failed to delete post.')
     }
   }
 
@@ -602,14 +792,13 @@ export default function PostsPage() {
     if (!post?.id) return
     const accCount = post.social_accounts?.length || 0
     if (accCount === 0) {
-      alert('This post has no attached social accounts. Please edit and select at least one social account first.')
+      setErrorMessage('This post has no attached social accounts. Please click Edit to select at least one social account before publishing.')
       return
     }
-    if (!window.confirm(`Are you sure you want to force publish this post immediately to ${accCount} social account(s)?`)) return
 
     setPublishingPostId(post.id)
     setErrorMessage('')
-    setSuccessMessage('')
+    setSuccessMessage(`Publishing post now to ${accCount} social account(s)... 🚀`)
     try {
       const res = await postsApi.publishPost(post.id)
       const updatedPost = res.data
@@ -620,17 +809,30 @@ export default function PostsPage() {
         // Check results if available immediately
         const results = updatedPost.publish_results || []
         const successCount = results.filter((r) => r.status === 'published').length
+        const skippedCount = results.filter((r) => r.status === 'skipped').length
         const failedCount = results.filter((r) => r.status === 'failed').length
 
-        if (failedCount === 0 && successCount > 0) {
+        if (failedCount === 0 && skippedCount === 0 && successCount > 0) {
           setSuccessMessage(`Post successfully published to all ${successCount} platform(s)! 🚀`)
-        } else if (successCount > 0 && failedCount > 0) {
-          setSuccessMessage(`Partially published: ${successCount} succeeded, ${failedCount} failed. Check details below.`)
+        } else if (successCount > 0) {
+          const parts = [`${successCount} published`]
+          if (skippedCount > 0) parts.push(`${skippedCount} skipped`)
+          if (failedCount > 0) parts.push(`${failedCount} failed`)
+          setSuccessMessage(`Publishing completed: ${parts.join(', ')}. Check details in Logs. 🚀`)
         } else if (failedCount > 0) {
-          setErrorMessage(`Publishing failed on all targeted accounts. Check error details.`)
+          setErrorMessage(`Publishing failed on targeted accounts. Check Logs for error details.`)
+        } else if (skippedCount > 0) {
+          setSuccessMessage(`Publishing completed: ${skippedCount} platform(s) skipped (media required). Check details in Logs.`)
         } else {
-          setSuccessMessage('Publishing executed successfully.')
+          setSuccessMessage('Publishing executed.')
         }
+      }
+
+      // Update post status in scheduledPosts state immediately so it remains visible as PUBLISHED
+      if (updatedPost) {
+        setScheduledPosts((prev) =>
+          prev.map((p) => (p.id === post.id ? updatedPost : p))
+        )
       }
 
       // Refresh post lists and open modals
@@ -644,9 +846,9 @@ export default function PostsPage() {
         loadRawLogContent(post.id)
       }
     } catch (err) {
-      console.error('Failed to publish post:', err)
+      console.error('Publishing error:', err)
       const detail = err.response?.data?.detail
-      setErrorMessage(typeof detail === 'string' ? detail : 'Failed to publish post.')
+      setErrorMessage(typeof detail === 'string' ? detail : 'Publishing failed. Please check your social accounts connection.')
     } finally {
       setPublishingPostId(null)
     }
@@ -688,50 +890,253 @@ export default function PostsPage() {
     }
   }, [currentDate, calendarView, rangeStart, rangeEnd])
 
+  const renderPostRowCard = (post, isPublishedSection = false) => {
+    const scheduledDateFormatted = post.scheduled_at
+      ? new Date(post.scheduled_at).toLocaleString(undefined, {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+        })
+      : 'Not scheduled'
+
+    const publishedDateFormatted = post.published_at
+      ? new Date(post.published_at).toLocaleString(undefined, {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+        })
+      : null
+
+    const isPublished = post.status === 'published'
+    const isFailed = post.status === 'failed'
+    const isPublishing = post.status === 'publishing'
+
+    return (
+      <div
+        key={post.id}
+        className={`scheduled-post-row-card ${
+          isPublished ? 'published-card' : isFailed ? 'failed-card' : 'scheduled-card'
+        }`}
+      >
+        {/* Left Block: Icon + Details + Chips + Time */}
+        <div className="scheduled-post-meta-left">
+          <div
+            className={`scheduled-post-icon-box ${
+              isPublished ? 'icon-box-published' : isFailed ? 'icon-box-failed' : ''
+            }`}
+            onClick={() => setSelectedPost(post)}
+            title="Click to view details"
+          >
+            <span className="scheduled-post-icon">
+              {isPublished ? '✅' : isFailed ? '❌' : isPublishing ? '⚡' : '⏳'}
+            </span>
+          </div>
+
+          <div
+            className="scheduled-post-content-group"
+            onClick={() => setSelectedPost(post)}
+            title="Click to view details"
+            style={{ cursor: 'pointer' }}
+          >
+            <div className="scheduled-post-caption">
+              {post.content || 'Untitled Post'}
+            </div>
+            <div className="scheduled-post-format-label">
+              Format: {(post.post_type || 'TEXT').toUpperCase()}
+            </div>
+          </div>
+
+          <span className="post-inline-dot">•</span>
+
+          {/* Attached Social Platforms */}
+          <div className="scheduled-post-platforms-list">
+            <span className="platforms-prefix">Platforms:</span>
+            {post.social_accounts && post.social_accounts.length > 0 ? (
+              post.social_accounts.map((sa) => {
+                const meta =
+                  PLATFORM_META[sa.platform?.toLowerCase()] || {
+                    icon: '📱',
+                    label: sa.platform,
+                  }
+                return (
+                  <span
+                    key={sa.id}
+                    className="scheduled-platform-badge"
+                    title={`${meta.label}: ${sa.account_name || sa.account_username}`}
+                  >
+                    <span className="platform-icon">{meta.icon}</span>
+                    <span className="platform-name">
+                      {sa.account_name || sa.account_username || meta.label}
+                    </span>
+                  </span>
+                )
+              })
+            ) : (
+              <span style={{ color: '#64748b', fontSize: '12px' }}>No platforms</span>
+            )}
+          </div>
+
+          <span className="post-inline-dot">•</span>
+
+          {/* Timestamp: Published or Scheduled */}
+          <div className="scheduled-post-timestamp">
+            {isPublished && publishedDateFormatted ? (
+              <>
+                Published:{' '}
+                <span className="time-highlight" style={{ color: '#10b981' }}>
+                  {publishedDateFormatted}
+                </span>
+              </>
+            ) : (
+              <>
+                Scheduled:{' '}
+                <span className="time-highlight">{scheduledDateFormatted}</span>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Right Block: Actions + Status Badge */}
+        <div className="scheduled-post-actions-right">
+          {isPublished ? (
+            <span
+              className="btn-action-published-tag"
+              title="Published successfully to connected channels"
+            >
+              ✓ Published
+            </span>
+          ) : (
+            <button
+              type="button"
+              className="btn-action-publish-gradient"
+              disabled={publishingPostId === post.id}
+              onClick={(e) => {
+                e.stopPropagation()
+                handlePublishNow(post)
+              }}
+              title={
+                isFailed
+                  ? 'Retry publishing'
+                  : 'Publish immediately to real social channels'
+              }
+            >
+              {publishingPostId === post.id
+                ? 'Publishing...'
+                : isFailed
+                ? '🔄 Retry Publish'
+                : '🚀 Publish Now'}
+            </button>
+          )}
+
+          {isPublished ? (
+            <div className="pill-badge-published">
+              <span className="green-dot">•</span>
+              <span>PUBLISHED</span>
+            </div>
+          ) : isFailed ? (
+            <div className="pill-badge-failed">
+              <span className="red-dot">•</span>
+              <span>FAILED</span>
+            </div>
+          ) : isPublishing ? (
+            <div className="pill-badge-publishing">
+              <span className="blue-dot">•</span>
+              <span>PUBLISHING</span>
+            </div>
+          ) : (
+            <div className="pill-badge-scheduled">
+              <span className="amber-dot">•</span>
+              <span>SCHEDULED</span>
+            </div>
+          )}
+
+          <button
+            type="button"
+            className="btn-vertical-action logs-btn"
+            onClick={(e) => handleOpenLogsModal(post, e)}
+            title="View Publishing History & Audit Logs"
+          >
+            <span className="v-icon">📜</span>
+            <span className="v-text">Logs</span>
+          </button>
+
+          <button
+            type="button"
+            className="btn-vertical-action edit-btn"
+            onClick={(e) => {
+              e.stopPropagation()
+              handleEditDraft(post)
+            }}
+            title="Edit this post"
+          >
+            <span className="v-icon">✏️</span>
+            <span className="v-text">Edit</span>
+          </button>
+
+          <button
+            type="button"
+            className="btn-vertical-action delete-btn"
+            onClick={(e) => {
+              e.stopPropagation()
+              handleDeletePost(post.id)
+            }}
+            title="Delete this post"
+          >
+            <span className="v-icon">🗑️</span>
+            <span className="v-text">Delete</span>
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   const today = new Date()
 
   return (
-    <div className="app-layout body-bg">
-      <Sidebar mobileOpen={mobileNav} onCloseMobile={() => setMobileNav(false)} />
-
-      <main className="app-main">
-        <Navbar
-          pageTitle="Content Scheduling & Publishing Engine"
-          pageSubtitle="Create, schedule, and automate posts across all 6 social media platforms"
-          mobileMenuLabel="Open menu"
-          onMobileMenu={() => setMobileNav(true)}
-        />
-
+    <AppShell pageTitle="Posts & Publishing" pageSubtitle="Create, schedule, and automate posts across all social platforms">
         {/* Top Header Row with Tabs and Composer Trigger */}
         <div className="posts-header-row">
           <div className="posts-tabs">
             <button
               type="button"
               className={`posts-tab-btn ${activeTab === 'queue' ? 'active' : ''}`}
-              onClick={() => setActiveTab('queue')}
+              onClick={() => handleTabSwitch('queue')}
             >
               📜 Scheduled Queue ({scheduledPosts.length})
             </button>
             <button
               type="button"
               className={`posts-tab-btn ${activeTab === 'calendar' ? 'active' : ''}`}
-              onClick={() => setActiveTab('calendar')}
+              onClick={() => handleTabSwitch('calendar')}
             >
               📅 Publishing Calendar
             </button>
             <button
               type="button"
               className={`posts-tab-btn ${activeTab === 'drafts' ? 'active' : ''}`}
-              onClick={() => setActiveTab('drafts')}
+              onClick={() => handleTabSwitch('drafts')}
             >
               📝 Drafts ({draftPosts.length})
             </button>
             <button
               type="button"
               className={`posts-tab-btn ${activeTab === 'recurring' ? 'active' : ''}`}
-              onClick={() => setActiveTab('recurring')}
+              onClick={() => handleTabSwitch('recurring')}
             >
               🔄 Recurring Schedules ({recurringRules.length})
+            </button>
+            <button
+              type="button"
+              className={`posts-tab-btn ${activeTab === 'media' ? 'active' : ''}`}
+              onClick={() => handleTabSwitch('media')}
+            >
+              📁 Media Library
             </button>
           </div>
 
@@ -894,6 +1299,267 @@ export default function PostsPage() {
                   rows={4}
                 />
               </div>
+
+              {/* Format-Specific Media Upload Section (Image, Video, Carousel, Story, Reel) */}
+              {contentType !== 'text' && (
+                <div className="composer-media-section">
+                  <div className="composer-media-header">
+                    <label className="form-label composer-media-title">
+                      {contentType === 'image' && '📸 Upload Post Image'}
+                      {contentType === 'video' && '🎬 Upload Video (MP4, MOV, WebM)'}
+                      {contentType === 'carousel' && '🎠 Upload Carousel Slides (2 - 10 Items)'}
+                      {contentType === 'story' && '⚡ Upload Story Media (9:16 Vertical Recommended)'}
+                      {contentType === 'reel' && '🎞️ Upload Reel Video (9:16 Vertical Recommended)'}
+                    </label>
+                    <span className={`media-limit-badge ${uploadedMedia.length > 0 ? 'attached' : 'required'}`}>
+                      {contentType === 'carousel'
+                        ? `${uploadedMedia.length}/10 items`
+                        : (uploadedMedia.length > 0 ? '✓ Media Attached' : 'Media Required')}
+                    </span>
+                  </div>
+
+                  {mediaError && (
+                    <div className="posts-banner-error" style={{ marginBottom: '12px' }}>
+                      <span>⚠️</span>
+                      <span>{mediaError}</span>
+                    </div>
+                  )}
+
+                  {/* Hidden File Input */}
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    style={{ display: 'none' }}
+                    accept={
+                      contentType === 'image'
+                        ? 'image/*'
+                        : (contentType === 'video' || contentType === 'reel'
+                          ? 'video/*'
+                          : 'image/*,video/*')
+                    }
+                    multiple={contentType === 'carousel'}
+                    onChange={handleFileUpload}
+                  />
+
+                  {/* Upload Dropzone */}
+                  {(!uploadedMedia.length || contentType === 'carousel') && uploadedMedia.length < 10 && (
+                    <div
+                      className={`media-dropzone ${isUploadingMedia ? 'uploading' : ''} ${isDraggingMedia ? 'dragging' : ''}`}
+                      onClick={() => !isUploadingMedia && fileInputRef.current?.click()}
+                      onDragOver={(e) => {
+                        e.preventDefault()
+                        setIsDraggingMedia(true)
+                      }}
+                      onDragLeave={(e) => {
+                        e.preventDefault()
+                        setIsDraggingMedia(false)
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault()
+                        setIsDraggingMedia(false)
+                        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                          handleFileUpload({ target: { files: e.dataTransfer.files } })
+                        }
+                      }}
+                    >
+                      {isUploadingMedia ? (
+                        <div className="upload-progress-container">
+                          <div className="upload-spinner">⏳</div>
+                          <div style={{ fontWeight: 600, color: '#c084fc', marginBottom: '6px' }}>
+                            Uploading media... {uploadProgress > 0 ? `${uploadProgress}%` : ''}
+                          </div>
+                          <div className="progress-track">
+                            <div className="progress-fill" style={{ width: `${uploadProgress || 20}%` }} />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="dropzone-content">
+                          <div className="dropzone-icon-circle">
+                            <UploadCloud size={28} />
+                          </div>
+                          <div className="dropzone-text-primary">
+                            {contentType === 'carousel'
+                              ? 'Drag & drop or click to add carousel slides'
+                              : `Drag & drop or click to choose ${contentType} file`}
+                          </div>
+                          <div className="dropzone-text-secondary">
+                            {contentType === 'image' && 'Supports all image formats: JPG, PNG, WebP, GIF, AVIF, HEIC, BMP, SVG (Max 100MB)'}
+                            {(contentType === 'video' || contentType === 'reel') && 'Supports MP4, MOV, WebM, MKV, AVI (Max 250MB)'}
+                            {contentType === 'story' && 'Supports vertical photos or clips up to 60s (Max 250MB)'}
+                            {contentType === 'carousel' && 'Combine up to 10 photos and videos with custom order'}
+                          </div>
+                          <div className="dropzone-browse-btn">
+                            Browse Files
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Attached Media Previews */}
+                  {uploadedMedia.length > 0 && (
+                    <div className={`media-preview-container ${contentType === 'carousel' ? 'is-carousel' : 'is-single'}`}>
+                      {contentType !== 'carousel' ? (
+                        // Single Hero Preview for Image / Video / Story / Reel
+                        uploadedMedia.map((item) => {
+                          const isVideo = item.media_type === 'video' || item.mime_type?.startsWith('video/')
+                          const dlUrl = item.preview_url || `/api/v1/media/${item.media_id}/download`
+
+                          return (
+                            <div key={item.media_id || 'single'} className="media-hero-card">
+                              <div className="media-hero-display">
+                                {isVideo ? (
+                                  <video
+                                    src={dlUrl}
+                                    className="media-hero-media media-hero-video"
+                                    controls
+                                    preload="metadata"
+                                  />
+                                ) : (
+                                  <img
+                                    src={dlUrl}
+                                    alt={item.original_filename}
+                                    className="media-hero-media media-hero-img"
+                                    onError={(e) => {
+                                      const token = localStorage.getItem('sp_access_token')
+                                      if (token && !e.target.src.includes('token=')) {
+                                        e.target.src = `/api/v1/media/${item.media_id}/download?token=${encodeURIComponent(token)}`
+                                      }
+                                    }}
+                                  />
+                                )}
+                              </div>
+
+                              <div className="media-hero-details">
+                                <div className="media-hero-info">
+                                  <div className="media-hero-filename" title={item.original_filename}>
+                                    {item.original_filename}
+                                  </div>
+                                  <div className="media-hero-meta">
+                                    <span className="media-hero-tag">
+                                      {isVideo ? '🎬 Video' : '🖼️ Image'}
+                                    </span>
+                                    {item.size_bytes && (
+                                      <span className="media-hero-size">
+                                        {(item.size_bytes / (1024 * 1024)).toFixed(2)} MB
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="media-hero-actions">
+                                  <button
+                                    type="button"
+                                    className="media-btn-action"
+                                    onClick={() => window.open(dlUrl, '_blank')}
+                                    title="Open full resolution in new tab"
+                                  >
+                                    <Eye size={14} />
+                                    <span>Full View</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="media-btn-action"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    title="Replace with another file"
+                                  >
+                                    <UploadCloud size={14} />
+                                    <span>Replace</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="media-btn-action danger"
+                                    onClick={() => handleRemoveMedia(item.media_id)}
+                                    title="Remove this media"
+                                  >
+                                    <Trash2 size={14} />
+                                    <span>Remove</span>
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })
+                      ) : (
+                        // Carousel Multi-Slide Cards Grid
+                        <div className="carousel-slides-grid">
+                          {uploadedMedia.map((item, idx) => {
+                            const isVideo = item.media_type === 'video' || item.mime_type?.startsWith('video/')
+                            const dlUrl = item.preview_url || `/api/v1/media/${item.media_id}/download`
+
+                            return (
+                              <div key={item.media_id || idx} className="carousel-slide-card">
+                                <div className="carousel-slide-badge">Slide {idx + 1}</div>
+                                <div
+                                  className="carousel-slide-thumb"
+                                  onClick={() => window.open(dlUrl, '_blank')}
+                                  title="Click to view full preview"
+                                >
+                                  {isVideo ? (
+                                    <video src={dlUrl} className="carousel-slide-media" />
+                                  ) : (
+                                    <img
+                                      src={dlUrl}
+                                      alt={item.original_filename}
+                                      className="carousel-slide-media"
+                                      onError={(e) => {
+                                        const token = localStorage.getItem('sp_access_token')
+                                        if (token && !e.target.src.includes('token=')) {
+                                          e.target.src = `/api/v1/media/${item.media_id}/download?token=${encodeURIComponent(token)}`
+                                        }
+                                      }}
+                                    />
+                                  )}
+                                </div>
+
+                                <div className="carousel-slide-info">
+                                  <span className="carousel-slide-name" title={item.original_filename}>
+                                    {item.original_filename}
+                                  </span>
+                                  <span className="carousel-slide-size">
+                                    {item.size_bytes ? `${(item.size_bytes / (1024 * 1024)).toFixed(1)} MB` : ''}
+                                  </span>
+                                </div>
+
+                                <div className="carousel-slide-actions">
+                                  <div className="carousel-reorder-buttons">
+                                    <button
+                                      type="button"
+                                      className="reorder-btn"
+                                      disabled={idx === 0}
+                                      onClick={() => handleMoveMedia(idx, -1)}
+                                      title="Move slide left"
+                                    >
+                                      ←
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="reorder-btn"
+                                      disabled={idx === uploadedMedia.length - 1}
+                                      onClick={() => handleMoveMedia(idx, 1)}
+                                      title="Move slide right"
+                                    >
+                                      →
+                                    </button>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    className="remove-media-btn"
+                                    onClick={() => handleRemoveMedia(item.media_id)}
+                                    title="Remove this slide"
+                                  >
+                                    ✕ Remove
+                                  </button>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Schedule Type Selection (One-Time vs Recurring) */}
               {!editingDraftId && (
@@ -1061,134 +1727,132 @@ export default function PostsPage() {
           </GlowCard>
         )}
 
-        {/* TAB 1: SCHEDULED QUEUE (MATCHING SCREENSHOT 2) */}
+        {/* TAB 1: SCHEDULED & PUBLISHED QUEUE */}
         {activeTab === 'queue' && (
           <div className="scheduled-queue-container" style={{ marginTop: '20px' }}>
+            {/* Filter Tabs for Queue */}
+            <div className="queue-filter-tabs">
+              {[
+                { id: 'all', label: 'All Posts', count: scheduledPosts.length },
+                { id: 'scheduled', label: '⏳ Scheduled Queue', count: upcomingQueuePosts.length },
+                { id: 'published', label: '🚀 Force-Published / Delivered', count: publishedQueuePosts.length },
+                ...(failedQueuePosts.length > 0
+                  ? [{ id: 'failed', label: '❌ Failed', count: failedQueuePosts.length }]
+                  : []),
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  className={`filter-pill-btn ${queueStatusFilter === tab.id ? 'active' : ''}`}
+                  onClick={() => setQueueStatusFilter(tab.id)}
+                >
+                  {tab.label} ({tab.count})
+                </button>
+              ))}
+            </div>
+
             {isLoadingPosts ? (
               <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
-                Loading scheduled posts...
+                Loading queue posts...
               </div>
             ) : scheduledPosts.length === 0 ? (
               <EmptyState
                 icon="📋"
-                title="No scheduled posts yet"
-                description="You haven't scheduled any posts yet. Click '+ Create & Schedule Post' above to compose and schedule your first post."
+                title="No posts in queue yet"
+                description="You haven't scheduled or published any posts yet. Click '+ Create & Schedule Post' below to compose and schedule your first post."
+                actionLabel="+ Create & Schedule Post"
+                onAction={() => {
+                  setEditingDraftId(null)
+                  setContent('')
+                  setScheduleDate('')
+                  setScheduleTime('')
+                  setShowComposer(true)
+                  window.scrollTo({ top: 0, behavior: 'smooth' })
+                }}
                 size="md"
               />
             ) : (
-              <div className="scheduled-posts-stack">
-                {scheduledPosts.map((post) => {
-                  const scheduledDateFormatted = post.scheduled_at
-                    ? new Date(post.scheduled_at).toLocaleString(undefined, {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric',
-                        hour: 'numeric',
-                        minute: '2-digit',
-                        hour12: true,
-                      })
-                    : 'Not scheduled'
-
-                  return (
-                    <div key={post.id} className="scheduled-post-row-card">
-                      {/* Left Block: Icon + Details + Chips + Time */}
-                      <div className="scheduled-post-meta-left">
-                        <div
-                          className="scheduled-post-icon-box"
-                          onClick={() => setSelectedPost(post)}
-                          title="Click to view details"
-                        >
-                          <span className="scheduled-post-icon">📄</span>
-                        </div>
-
-                        <div
-                          className="scheduled-post-content-group"
-                          onClick={() => setSelectedPost(post)}
-                          title="Click to view details"
-                          style={{ cursor: 'pointer' }}
-                        >
-                          <div className="scheduled-post-caption">
-                            {post.content || 'Untitled Post'}
-                          </div>
-                          <div className="scheduled-post-format-label">
-                            Format: {(post.post_type || 'TEXT').toUpperCase()}
-                          </div>
-                        </div>
-
-                        <span className="post-inline-dot">•</span>
-
-                        {/* Attached Social Platforms */}
-                        <div className="scheduled-post-platforms-list">
-                          <span className="platforms-prefix">Platforms:</span>
-                          {post.social_accounts && post.social_accounts.length > 0 ? (
-                            post.social_accounts.map((sa) => {
-                              const meta = PLATFORM_META[sa.platform.toLowerCase()] || { icon: '📱', label: sa.platform }
-                              return (
-                                <span key={sa.id} className="scheduled-platform-badge" title={`${meta.label}: ${sa.account_name || sa.account_username}`}>
-                                  <span className="platform-icon">{meta.icon}</span>
-                                  <span className="platform-name">{sa.account_name || sa.account_username || meta.label}</span>
-                                </span>
-                              )
-                            })
-                          ) : (
-                            <span style={{ color: '#64748b', fontSize: '12px' }}>No platforms</span>
-                          )}
-                        </div>
-
-                        <span className="post-inline-dot">•</span>
-
-                        {/* Scheduled Timestamp */}
-                        <div className="scheduled-post-timestamp">
-                          Scheduled: <span className="time-highlight">{scheduledDateFormatted}</span>
-                        </div>
+              <div className="queue-sections-wrapper">
+                {/* SECTION 1: UPCOMING SCHEDULED QUEUE (LATEST ON TOP) */}
+                {(queueStatusFilter === 'all' || queueStatusFilter === 'scheduled') && (
+                  <div className="queue-section-group">
+                    <div className="queue-section-header first">
+                      <div className="queue-section-title">
+                        <span>⏳ Upcoming Scheduled Queue</span>
+                        <span className="queue-section-count">
+                          {upcomingQueuePosts.length} Pending
+                        </span>
                       </div>
-
-                      {/* Right Block: Publish Now + SCHEDULED Badge + Logs + Delete */}
-                      <div className="scheduled-post-actions-right">
-                        <button
-                          type="button"
-                          className="btn-action-publish-gradient"
-                          disabled={publishingPostId === post.id}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handlePublishNow(post)
-                          }}
-                          title="Publish immediately to real social channels"
-                        >
-                          {publishingPostId === post.id ? 'Publishing...' : '🚀 Publish Now'}
-                        </button>
-
-                        <div className="pill-badge-scheduled">
-                          <span className="amber-dot">•</span>
-                          <span>SCHEDULED</span>
-                        </div>
-
-                        <button
-                          type="button"
-                          className="btn-vertical-action logs-btn"
-                          onClick={(e) => handleOpenLogsModal(post, e)}
-                          title="View Publishing History & Audit Logs"
-                        >
-                          <span className="v-icon">📜</span>
-                          <span className="v-text">Logs</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          className="btn-vertical-action delete-btn"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleDeletePost(post.id)
-                          }}
-                          title="Delete this scheduled post"
-                        >
-                          <span className="v-icon">🗑️</span>
-                          <span className="v-text">Delete</span>
-                        </button>
+                      <div className="queue-section-subtitle">
+                        Posts in queue waiting to be published. Latest scheduled posts appear on top.
                       </div>
                     </div>
-                  )
-                })}
+
+                    {upcomingQueuePosts.length === 0 ? (
+                      <div className="queue-empty-section-notice">
+                        <span>⏳ No pending posts in queue. Click '+ Create & Schedule Post' above to schedule a new post.</span>
+                      </div>
+                    ) : (
+                      <div className="scheduled-posts-stack">
+                        {upcomingQueuePosts.map((post) => renderPostRowCard(post, false))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* SECTION 2: FORCE-PUBLISHED & DELIVERED POSTS (LATEST PUBLISHED ON TOP) */}
+                {(queueStatusFilter === 'all' || queueStatusFilter === 'published') && (
+                  <div className="queue-section-group" style={{ marginTop: '36px' }}>
+                    <div className="queue-section-header">
+                      <div className="queue-section-title">
+                        <span>🚀 Force-Published & Delivered Posts</span>
+                        <span className="queue-section-count green">
+                          {publishedQueuePosts.length} Published
+                        </span>
+                      </div>
+                      <div className="queue-section-subtitle">
+                        Posts published to social accounts (including manual force-publishes). Latest published appear on top.
+                      </div>
+                    </div>
+
+                    {publishedQueuePosts.length === 0 ? (
+                      <div className="queue-empty-section-notice">
+                        <span>🚀 No published posts yet. When you click '🚀 Publish Now' or when a scheduled post publishes, it will appear here.</span>
+                      </div>
+                    ) : (
+                      <div className="scheduled-posts-stack">
+                        {publishedQueuePosts.map((post) => renderPostRowCard(post, true))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* SECTION 3: FAILED ATTEMPTS (IF FAILED POSTS EXIST OR TAB SELECTED) */}
+                {(queueStatusFilter === 'failed' || (queueStatusFilter === 'all' && failedQueuePosts.length > 0)) && (
+                  <div className="queue-section-group" style={{ marginTop: '36px' }}>
+                    <div className="queue-section-header">
+                      <div className="queue-section-title">
+                        <span>❌ Failed Publishing Attempts</span>
+                        <span className="queue-section-count red">
+                          {failedQueuePosts.length} Failed
+                        </span>
+                      </div>
+                      <div className="queue-section-subtitle">
+                        Posts that encountered errors during publishing. You can inspect logs or retry publishing.
+                      </div>
+                    </div>
+
+                    {failedQueuePosts.length === 0 ? (
+                      <div className="queue-empty-section-notice">
+                        <span>✅ No failed posts! All posts were published successfully.</span>
+                      </div>
+                    ) : (
+                      <div className="scheduled-posts-stack">
+                        {failedQueuePosts.map((post) => renderPostRowCard(post, false))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1264,7 +1928,19 @@ export default function PostsPage() {
                 <EmptyState
                   icon="📅"
                   title="No scheduled posts"
-                  description={`You don't have any posts scheduled for this ${calendarView}. Click '+ Create & Schedule Post' above to schedule one.`}
+                  description={`You don't have any posts scheduled for this ${calendarView}. Click '+ Schedule for This Period' below to schedule one.`}
+                  actionLabel="+ Schedule for This Period"
+                  onAction={() => {
+                    setEditingDraftId(null)
+                    setContent('')
+                    const yr = currentDate.getFullYear()
+                    const mo = String(currentDate.getMonth() + 1).padStart(2, '0')
+                    const da = String(currentDate.getDate()).padStart(2, '0')
+                    setScheduleDate(`${yr}-${mo}-${da}`)
+                    setScheduleTime('12:00')
+                    setShowComposer(true)
+                    window.scrollTo({ top: 0, behavior: 'smooth' })
+                  }}
                   size="sm"
                 />
               </div>
@@ -1374,6 +2050,15 @@ export default function PostsPage() {
                 icon="📝"
                 title="No saved drafts"
                 description="You don't have any drafts saved yet. Open the composer and click 'Save as Draft' to save unfinished posts."
+                actionLabel="+ Create Draft"
+                onAction={() => {
+                  setEditingDraftId(null)
+                  setContent('')
+                  setScheduleDate('')
+                  setScheduleTime('')
+                  setShowComposer(true)
+                  window.scrollTo({ top: 0, behavior: 'smooth' })
+                }}
                 size="md"
               />
             ) : (
@@ -1469,7 +2154,15 @@ export default function PostsPage() {
               <EmptyState
                 icon="🔄"
                 title="No recurring schedules"
-                description="You haven't set up any recurring posts yet. Open '+ Create Post' and choose 'Recurring Post' to schedule repeating content."
+                description="You haven't set up any recurring posts yet. Open '+ Create Recurring Post' below to schedule repeating content."
+                actionLabel="+ Create Recurring Post"
+                onAction={() => {
+                  setEditingDraftId(null)
+                  setContent('')
+                  setScheduleType('recurring')
+                  setShowComposer(true)
+                  window.scrollTo({ top: 0, behavior: 'smooth' })
+                }}
                 size="md"
               />
             ) : (
@@ -1542,9 +2235,153 @@ export default function PostsPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleDeleteRecurringRule(rule.id)}
+                          onClick={() => handleDeleteRule(rule.id)}
                           style={{ color: '#ef4444', padding: '4px 8px' }}
                           title="Delete this recurring rule and its generated occurrences"
+                        >
+                          🗑️
+                        </Button>
+                      </div>
+                    </GlowCard>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 5: MEDIA LIBRARY */}
+        {activeTab === 'media' && (
+          <div style={{ marginTop: '20px' }}>
+            <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+              <div>
+                <h3 className="section-heading" style={{ margin: 0 }}>
+                  Media Library
+                </h3>
+                <p className="section-subheading" style={{ margin: 0, marginTop: '4px' }}>
+                  Manage images, videos, and multi-asset carousels for your social campaigns
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  type="file"
+                  id="media-library-upload-input"
+                  multiple
+                  accept="image/*,video/*"
+                  onChange={handleFileUpload}
+                  style={{ display: 'none' }}
+                />
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => document.getElementById('media-library-upload-input')?.click()}
+                  disabled={isUploadingMedia}
+                >
+                  {isUploadingMedia ? `Uploading ${uploadProgress}%...` : '📤 Upload Media'}
+                </Button>
+              </div>
+            </div>
+
+            {mediaError && (
+              <div className="posts-banner-error" style={{ marginBottom: '16px' }}>
+                <span>⚠️</span>
+                <span>{mediaError}</span>
+              </div>
+            )}
+
+            {uploadedMedia.length === 0 ? (
+              <EmptyState
+                icon="📁"
+                title="No media uploaded yet"
+                description="Upload images or videos to preview, organize, and attach them seamlessly across social posts and campaigns."
+                actionLabel="📤 Upload First Asset"
+                onAction={() => document.getElementById('media-library-upload-input')?.click()}
+                size="md"
+              />
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '16px' }}>
+                {uploadedMedia.map((item, idx) => {
+                  const isVideo = item.media_type === 'video' || item.mime_type?.startsWith('video/')
+                  const dlUrl = item.preview_url || `/api/v1/media/${item.media_id}/download`
+
+                  return (
+                    <GlowCard key={item.media_id || idx} hover style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <div
+                        style={{
+                          height: '140px',
+                          borderRadius: '8px',
+                          overflow: 'hidden',
+                          background: 'rgba(0,0,0,0.3)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                        }}
+                        onClick={() => window.open(dlUrl, '_blank')}
+                        title="Click to preview in new tab"
+                      >
+                        {isVideo ? (
+                          <video
+                            src={dlUrl}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            controls
+                            preload="metadata"
+                          />
+                        ) : (
+                          <img
+                            src={dlUrl}
+                            alt={item.original_filename}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            onError={(e) => {
+                              const token = localStorage.getItem('sp_access_token')
+                              if (token && !e.target.src.includes('token=')) {
+                                e.target.src = `/api/v1/media/${item.media_id}/download?token=${encodeURIComponent(token)}`
+                              }
+                            }}
+                          />
+                        )}
+                      </div>
+
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            color: '#f8fafc',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                          title={item.original_filename}
+                        >
+                          {item.original_filename}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                          {item.size_bytes ? `${(item.size_bytes / (1024 * 1024)).toFixed(2)} MB` : 'Attached asset'}
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '6px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '8px' }}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setUploadedMedia([{ ...item, position: 1 }])
+                            setShowComposer(true)
+                            setContentType(isVideo ? 'video' : 'image')
+                            setActiveTab('queue')
+                            window.scrollTo({ top: 0, behavior: 'smooth' })
+                          }}
+                          style={{ flex: 1, fontSize: '11px', padding: '4px 8px' }}
+                        >
+                          Use in Post
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoveMedia(item.media_id)}
+                          style={{ color: '#ef4444', padding: '4px 8px' }}
+                          title="Remove media asset"
                         >
                           🗑️
                         </Button>
@@ -1656,14 +2493,18 @@ export default function PostsPage() {
                     {selectedPost.publish_results.map((res) => {
                       const meta = PLATFORM_META[res.platform.toLowerCase()] || { icon: '📱', label: res.platform }
                       const isSuccess = res.status === 'published'
+                      const isSkipped = res.status === 'skipped'
+                      const rowClass = isSuccess ? 'success' : isSkipped ? 'skipped' : 'failed'
+                      const tagClass = isSuccess ? 'published' : isSkipped ? 'skipped' : 'failed'
+                      const tagLabel = isSuccess ? '✓ Published' : isSkipped ? '⊘ Skipped' : '✗ Failed'
 
                       return (
-                        <div key={res.id} className={`publish-result-row ${isSuccess ? 'success' : 'failed'}`}>
+                        <div key={res.id} className={`publish-result-row ${rowClass}`}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <span>{meta.icon}</span>
                             <strong>{meta.label}</strong>
-                            <span className={`publish-status-tag ${isSuccess ? 'published' : 'failed'}`}>
-                              {isSuccess ? '✓ Published' : '✗ Failed'}
+                            <span className={`publish-status-tag ${tagClass}`}>
+                              {tagLabel}
                             </span>
                           </div>
 
@@ -1679,8 +2520,8 @@ export default function PostsPage() {
                               </a>
                             )}
                             {res.error_message && (
-                              <span style={{ color: '#f87171', fontSize: '11px', maxWidth: '280px' }} title={res.error_message}>
-                                ⚠️ {res.error_message.length > 40 ? res.error_message.slice(0, 40) + '...' : res.error_message}
+                              <span style={{ color: isSkipped ? '#c084fc' : '#f87171', fontSize: '11px', maxWidth: '280px' }} title={res.error_message}>
+                                {isSkipped ? 'ℹ️ ' : '⚠️ '}{res.error_message.length > 40 ? res.error_message.slice(0, 40) + '...' : res.error_message}
                               </span>
                             )}
                           </div>
@@ -1706,9 +2547,10 @@ export default function PostsPage() {
                       else if (status === 'published') label = '✓ Published'
                       else if (status === 'failed') label = `✗ Failed (${job.attempt_count}/${job.max_attempts})`
                       else if (status === 'cancelled') label = '🚫 Cancelled'
+                      else if (status === 'skipped') label = '⊘ Skipped'
 
                       return (
-                        <div key={job.id} className={`publish-result-row ${status === 'published' ? 'success' : status === 'failed' ? 'failed' : ''}`}>
+                        <div key={job.id} className={`publish-result-row ${status === 'published' ? 'success' : status === 'skipped' ? 'skipped' : status === 'failed' ? 'failed' : ''}`}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <span>{meta.icon}</span>
                             <strong>{meta.label}</strong>
@@ -2045,7 +2887,6 @@ export default function PostsPage() {
             </div>
           </div>
         )}
-      </main>
-    </div>
+    </AppShell>
   )
 }

@@ -1,6 +1,7 @@
 /**
  * src/components/ui/EmptyState.jsx
- * Centered empty state with icon, title, and optional CTA.
+ * Modernized empty state — clean icon container, professional typography.
+ * All existing props preserved.
  */
 
 import './EmptyState.css'
@@ -14,10 +15,12 @@ export default function EmptyState({
   size = 'md',
 }) {
   return (
-    <div className={`empty-state size-${size}`}>
-      <span className="empty-icon">{icon}</span>
-      <h3 className="empty-title">{title}</h3>
-      <p className="empty-desc">{description}</p>
+    <div className={`sp-empty-state ${size === 'sm' ? 'sp-empty-sm' : ''}`}>
+      <div className="sp-empty-icon-wrap">
+        <span className="sp-empty-icon">{icon}</span>
+      </div>
+      <h3 className="sp-empty-title">{title}</h3>
+      <p className="sp-empty-desc">{description}</p>
       {actionLabel && onAction && (
         <button className="btn btn-primary btn-sm" onClick={onAction}>
           {actionLabel}

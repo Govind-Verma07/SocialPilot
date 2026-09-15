@@ -33,12 +33,21 @@ def _get_due_post_ids() -> List[str]:
     db: Session = SessionLocal()
     try:
         now_utc = datetime.now(timezone.utc)
+        from datetime import timedelta
+        from sqlalchemy import or_, and_
+        stale_threshold = now_utc - timedelta(minutes=5)
         records = (
             db.query(Post.id)
             .filter(
-                Post.status == PostStatus.scheduled.value,
                 Post.scheduled_at.isnot(None),
                 Post.scheduled_at <= now_utc,
+                or_(
+                    Post.status == PostStatus.scheduled.value,
+                    and_(
+                        Post.status == PostStatus.publishing.value,
+                        Post.updated_at <= stale_threshold,
+                    ),
+                ),
             )
             .order_by(Post.scheduled_at.asc())
             .all()

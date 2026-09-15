@@ -1,15 +1,23 @@
 /**
  * src/components/ui/GlowCard.jsx
- * A card with subtle 3D border, neon edge highlight, and glassmorphism background.
+ * Modernized card — clean Shadcn-style surface with optional hover lift.
+ * Drop-in replacement: accepts all existing props.
  */
 
 import './GlowCard.css'
 
-export default function GlowCard({ children, className = '', padding = '24px', hover = true, onClick }) {
+export default function GlowCard({
+  children,
+  className = '',
+  padding,
+  hover = true,
+  onClick,
+  style,
+}) {
   return (
     <div
-      className={`glow-card glass-card ${hover ? 'hover-lift' : ''} ${className}`}
-      style={{ '--card-padding': padding }}
+      className={`sp-card ${hover ? 'sp-card-hover' : ''} ${className}`}
+      style={{ ...(padding ? { padding } : {}), ...style }}
       onClick={onClick}
     >
       {children}

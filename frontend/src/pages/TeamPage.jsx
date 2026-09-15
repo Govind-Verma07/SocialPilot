@@ -7,8 +7,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { teamApi } from '../api/teamApi'
-import Sidebar from '../components/Sidebar'
-import Navbar from '../components/Navbar'
+import AppShell from '../components/AppShell'
 import Modal from '../components/Modal'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
@@ -158,16 +157,7 @@ export default function TeamPage() {
   }
 
   return (
-    <div className="app-layout body-bg">
-      <Sidebar mobileOpen={mobileNav} onCloseMobile={() => setMobileNav(false)} />
-
-      <main className="app-main">
-        <Navbar
-          pageTitle="Team & Workspace"
-          pageSubtitle="Manage shared workspaces and collaborate with team members."
-          mobileMenuLabel="Open menu"
-          onMobileMenu={() => setMobileNav(true)}
-        />
+    <AppShell pageTitle="Team & Workspace" pageSubtitle="Manage shared workspaces and collaborate with team members">
 
         {successMsg && (
           <div className="alert alert-success" role="alert">
@@ -421,7 +411,6 @@ export default function TeamPage() {
             </div>
           </form>
         </Modal>
-      </main>
-    </div>
+    </AppShell>
   )
 }

@@ -25,6 +25,8 @@ class RecurringPostCreate(BaseModel):
     occurrence_limit: Optional[int] = Field(None, ge=1, le=200, description="Optional cap on generated occurrences")
     post_type: Optional[str] = Field("text", description="text, image, video, carousel")
     media_urls: Optional[List[str]] = Field(default_factory=list)
+    media_ids: Optional[List[str]] = Field(default_factory=list)
+    media_items: Optional[List[dict]] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_rules(self):

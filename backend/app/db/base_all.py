@@ -31,5 +31,7 @@ from app.models.user_settings import UserSettings  # noqa: F401
 from app.models.recurring_rule import RecurringRule, RecurringRuleSocialAccount  # noqa: F401
 from app.models.post import Post, PostSocialAccount  # noqa: F401
 from app.models.post_publish_result import PostPublishResult  # noqa: F401
+from app.models.publishing_job import PublishingJob  # noqa: F401
+from app.models.publishing_log import PublishingLog  # noqa: F401
 
 

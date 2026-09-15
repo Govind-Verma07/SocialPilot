@@ -29,14 +29,23 @@ def get_due_posts_query(db: Session, now_utc: datetime):
     """
     Returns query for posts eligible for automated publishing:
     status == SCHEDULED and scheduled_at <= now_utc.
-    Explicitly ignores drafts, published, failed, and publishing posts.
+    Also recovers stale posts stuck in PUBLISHING for > 5 minutes.
     """
+    from datetime import timedelta
+    from sqlalchemy import or_, and_
+    stale_threshold = now_utc - timedelta(minutes=5)
     return (
         db.query(Post)
         .filter(
-            Post.status == PostStatus.scheduled.value,
             Post.scheduled_at.isnot(None),
             Post.scheduled_at <= now_utc,
+            or_(
+                Post.status == PostStatus.scheduled.value,
+                and_(
+                    Post.status == PostStatus.publishing.value,
+                    Post.updated_at <= stale_threshold,
+                ),
+            ),
         )
         .order_by(Post.scheduled_at.asc())
     )
@@ -45,17 +54,27 @@ def get_due_posts_query(db: Session, now_utc: datetime):
 def claim_post_for_publishing(db: Session, post_id: str) -> bool:
     """
     Atomically transitions a post from SCHEDULED to PUBLISHING.
-    Returns True if successfully claimed by this worker, False if already claimed or not scheduled.
-    Uses an atomic UPDATE ... WHERE id = :id AND status = 'scheduled'.
+    Also allows claiming if post was stuck in PUBLISHING for > 5 minutes.
+    Returns True if successfully claimed by this worker, False if already claimed.
     """
+    from datetime import timedelta
+    from sqlalchemy import or_, and_
+    now_utc = datetime.now(timezone.utc)
+    stale_threshold = now_utc - timedelta(minutes=5)
     rows_updated = (
         db.query(Post)
         .filter(
             Post.id == post_id,
-            Post.status == PostStatus.scheduled.value,
+            or_(
+                Post.status == PostStatus.scheduled.value,
+                and_(
+                    Post.status == PostStatus.publishing.value,
+                    Post.updated_at <= stale_threshold,
+                ),
+            ),
         )
         .update(
-            {"status": PostStatus.publishing.value, "updated_at": datetime.now(timezone.utc)},
+            {"status": PostStatus.publishing.value, "updated_at": now_utc},
             synchronize_session="fetch",
         )
     )
@@ -173,17 +192,24 @@ def process_queued_and_retry_jobs():
 def publish_post_task(post_id: str):
     """
     Dedicated asynchronous publishing task alias (Phase 7 & 8).
-    Receives serializable post_id, obtains fresh DB session, claims atomically, and publishes via Phase 5 service.
+    Enqueues Phase 8 platform jobs and dispatches each to worker queue.
     """
     db: Session = SessionLocal()
     try:
-        try:
-            jobs = enqueue_publishing_jobs(db, post_id)
-            for j in jobs:
-                process_publishing_job.delay(j.id)
-        except Exception as e:
-            logger.warning(f"Could not enqueue platform jobs in publish_post_task: {e}")
-        return publish_single_post_task(post_id)
+        jobs = enqueue_publishing_jobs(db, post_id)
+        dispatched = []
+        for j in jobs:
+            process_publishing_job.delay(j.id)
+            dispatched.append(j.id)
+        return {
+            "post_id": post_id,
+            "status": "queued",
+            "jobs_dispatched": len(dispatched),
+            "job_ids": dispatched,
+        }
+    except Exception as e:
+        logger.warning(f"Could not enqueue platform jobs in publish_post_task: {e}")
+        return {"post_id": post_id, "status": "failed", "error": str(e)}
     finally:
         db.close()
 

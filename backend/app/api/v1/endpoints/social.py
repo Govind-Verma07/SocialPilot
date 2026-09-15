@@ -7,9 +7,12 @@ Milestone 1 supported platforms:
 """
 
 import json
+import logging
 from datetime import datetime, timezone
 from typing import List, Optional
 from urllib.parse import urlencode
+
+logger = logging.getLogger("uvicorn.error")
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
@@ -74,6 +77,43 @@ def _decode_oauth_state(state_token: str) -> dict:
         ) from exc
 
 
+def _get_platform_redirect_uri(platform: str, request: Request) -> str:
+    """
+    Return configured redirect URI for the platform.
+    Always reads the current .env file live so any changes take effect immediately
+    without requiring a server restart, falling back to settings / dynamic base_url.
+    """
+    attr_name = f"{platform.upper()}_REDIRECT_URI"
+
+    # 1. Check live .env file dynamically so manual updates take immediate effect
+    try:
+        from dotenv import dotenv_values
+        from pathlib import Path
+        candidate_paths = [
+            Path(__file__).resolve().parents[4] / ".env",
+            Path.cwd() / ".env",
+        ]
+        for env_file in candidate_paths:
+            if env_file.exists():
+                live_env = dotenv_values(str(env_file))
+                val = live_env.get(attr_name)
+                if val and str(val).strip():
+                    clean_val = str(val).strip()
+                    setattr(settings, attr_name, clean_val)
+                    return clean_val
+    except Exception:
+        pass
+
+    # 2. Fall back to settings singleton or environment
+    configured_uri = getattr(settings, attr_name, "")
+    if configured_uri and str(configured_uri).strip():
+        return str(configured_uri).strip()
+
+    # 3. Fall back to dynamic request.base_url
+    base_url = str(request.base_url).rstrip("/")
+    return f"{base_url}{settings.API_V1_PREFIX}/social/oauth/{platform}/callback"
+
+
 # ---------------------------------------------------------------------------
 # Platform Discovery Endpoint
 # ---------------------------------------------------------------------------
@@ -131,9 +171,8 @@ def get_authorization_url(
             ),
         )
 
-    # Build dynamic redirect URI based on backend URL
-    base_url = str(request.base_url).rstrip("/")
-    redirect_uri = f"{base_url}{settings.API_V1_PREFIX}/social/oauth/{provider.platform.value}/callback"
+    # Build redirect URI: prioritize configured URI from settings/env, fallback to request.base_url
+    redirect_uri = _get_platform_redirect_uri(provider.platform.value, request)
 
     state = _create_oauth_state(user_id=current_user.id, team_id=team_id)
     auth_url = provider.get_authorization_url(state=state, redirect_uri=redirect_uri)
@@ -166,34 +205,42 @@ async def oauth_callback(
     """
     frontend_base = settings.allowed_origins_list[0] if settings.allowed_origins_list else "http://localhost:5173"
 
-    if error:
-        err_msg = error_description or error or "OAuth authorization was canceled or failed."
-        params = urlencode({"error": err_msg, "platform": platform})
-        return RedirectResponse(f"{frontend_base}/accounts?{params}")
-
-    if not code or not state:
-        params = urlencode({"error": "Missing code or state parameter in OAuth callback.", "platform": platform})
-        return RedirectResponse(f"{frontend_base}/accounts?{params}")
-
-    if platform == "google":
-        from app.api.v1.endpoints.auth import google_oauth_callback
-        return await google_oauth_callback(request, code, state, error, error_description, db)
-
-    # Validate state token
-    state_payload = _decode_oauth_state(state)
-    user_id = state_payload.get("sub")
-    team_id = state_payload.get("team_id")
-
-    provider = get_provider(platform)
-    if not provider:
-        params = urlencode({"error": f"Unsupported platform '{platform}'.", "platform": platform})
-        return RedirectResponse(f"{frontend_base}/accounts?{params}")
-
-    # Build redirect URI matching authorize call
-    base_url = str(request.base_url).rstrip("/")
-    redirect_uri = f"{base_url}{settings.API_V1_PREFIX}/social/oauth/{provider.platform.value}/callback"
-
     try:
+        if error:
+            err_msg = error_description or error or "OAuth authorization was canceled or failed."
+            logger.warning("OAuth callback canceled/error received from %s: %s", platform, err_msg)
+            params = urlencode({"error": err_msg, "platform": platform})
+            return RedirectResponse(f"{frontend_base}/accounts?{params}", status_code=status.HTTP_302_FOUND)
+
+        if not code or not state:
+            logger.warning("OAuth callback missing code or state for %s", platform)
+            params = urlencode({"error": "Missing code or state parameter in OAuth callback.", "platform": platform})
+            return RedirectResponse(f"{frontend_base}/accounts?{params}", status_code=status.HTTP_302_FOUND)
+
+        if platform == "google":
+            from app.api.v1.endpoints.auth import google_oauth_callback
+            return await google_oauth_callback(request, code, state, error, error_description, db)
+
+        # Validate state token
+        try:
+            state_payload = _decode_oauth_state(state)
+        except Exception as state_exc:
+            logger.error("Failed to decode OAuth state for %s: %s", platform, state_exc)
+            params = urlencode({"error": "Invalid or expired OAuth state parameter. Please try connecting again.", "platform": platform})
+            return RedirectResponse(f"{frontend_base}/accounts?{params}", status_code=status.HTTP_302_FOUND)
+
+        user_id = state_payload.get("sub")
+        team_id = state_payload.get("team_id")
+
+        provider = get_provider(platform)
+        if not provider:
+            params = urlencode({"error": f"Unsupported platform '{platform}'.", "platform": platform})
+            return RedirectResponse(f"{frontend_base}/accounts?{params}", status_code=status.HTTP_302_FOUND)
+
+        # Build redirect URI matching authorize call
+        redirect_uri = _get_platform_redirect_uri(provider.platform.value, request)
+        logger.info("OAuth callback for %s using redirect_uri: %s", platform, redirect_uri)
+
         token_data = await provider.exchange_code(code=code, redirect_uri=redirect_uri)
         access_token = token_data.get("access_token")
         refresh_token = token_data.get("refresh_token")
@@ -277,12 +324,17 @@ async def oauth_callback(
             profile_picture_url=profile_picture_url,
         )
 
+        logger.info("Successfully connected %s account: %s (%s)", platform, account_name, account.id)
         params = urlencode({"connected": provider.platform.value, "status": "success"})
-        return RedirectResponse(f"{frontend_base}/accounts?{params}")
+        return RedirectResponse(f"{frontend_base}/accounts?{params}", status_code=status.HTTP_302_FOUND)
 
     except Exception as exc:
-        params = urlencode({"error": f"Failed to connect account: {str(exc)}", "platform": platform})
-        return RedirectResponse(f"{frontend_base}/accounts?{params}")
+        logger.error("OAuth callback error for platform %s: %s", platform, exc, exc_info=True)
+        safe_msg = str(exc)
+        if "secret" in safe_msg.lower() or "token" in safe_msg.lower():
+            safe_msg = "OAuth authentication exchange failed."
+        params = urlencode({"error": f"Failed to connect account: {safe_msg}", "platform": platform})
+        return RedirectResponse(f"{frontend_base}/accounts?{params}", status_code=status.HTTP_302_FOUND)
 
 
 # ---------------------------------------------------------------------------

@@ -5,8 +5,9 @@ Publishing service orchestrator for Phase 5.
 Coordinates publishing a post to all associated social accounts and recording outcomes.
 """
 
+import logging
 from datetime import datetime, timezone
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 from sqlalchemy.orm import Session
 
 from app.models.enums import PostStatus, PublishingLogEventType
@@ -16,39 +17,70 @@ from app.models.publishing_log import PublishingLog
 from app.models.social_account import SocialAccount
 from app.services.publishing.adapters import get_publisher
 from app.services.publishing.base import PublishResult
+from app.services.publishing.media_resolver import resolve_post_publish_context
+
+logger = logging.getLogger("socialpilot.publishing")
 
 
 class PublishingService:
     @staticmethod
     async def publish_post(db: Session, post: Post) -> Tuple[Post, List[PostPublishResult]]:
         """
-        Publishes a post across all attached social accounts independently.
-        Updates Post status (published if any succeeded, failed if all failed)
-        and persists PostPublishResult records.
+        Publish post to all attached social accounts with resolved media context.
+        Records results and transitions post to published or failed.
         """
         # Ensure post has attached social accounts
         attached_accounts = [psa.social_account for psa in post.social_accounts if psa.social_account]
         if not attached_accounts:
             raise ValueError("Post has no attached social accounts to publish to.")
 
+        # Resolve media context from MongoDB content_posts & media_assets
+        context = await resolve_post_publish_context(db, post)
+
+        p_type = (context.post_type or post.post_type or "text").lower().strip()
+        media_count = context.media_count
+
+        logger.info(
+            f"Publishing pre-check for post #{post.id}: post_type={p_type}, media_count={media_count}, "
+            f"media_ids={[m.media_id for m in context.media_items]}, "
+            f"resolved_media_types={[m.media_type for m in context.media_items]}"
+        )
+
+        pipeline_error: Optional[str] = None
+        if p_type in ("image", "video", "carousel", "story", "reel") and media_count == 0:
+            pipeline_error = f"Pipeline error: Post format '{p_type.upper()}' requires media attachments, but resolved media_count is 0."
+        elif p_type == "carousel" and media_count < 2:
+            pipeline_error = f"Pipeline error: Carousel format requires at least 2 media items, but resolved media_count is {media_count}."
+
         results: List[PostPublishResult] = []
         any_success = False
 
         for account in attached_accounts:
             platform_str = account.platform.value if hasattr(account.platform, "value") else str(account.platform)
-            try:
-                publisher = get_publisher(platform_str)
-                res: PublishResult = await publisher.publish(post, account)
-            except Exception as exc:
+            if pipeline_error:
                 res = PublishResult(
                     success=False,
                     platform=platform_str,
-                    error_message=f"Publishing failed: {str(exc)}",
+                    error_message=pipeline_error,
                 )
+            else:
+                try:
+                    publisher = get_publisher(platform_str)
+                    res: PublishResult = await publisher.publish(post, account, context=context)
+                except Exception as exc:
+                    res = PublishResult(
+                        success=False,
+                        platform=platform_str,
+                        error_message=f"Publishing failed: {str(exc)}",
+                    )
 
-            status_str = "published" if res.success else "failed"
-            if res.success:
+            if getattr(res, "skipped", False):
+                status_str = "skipped"
+            elif res.success:
+                status_str = "published"
                 any_success = True
+            else:
+                status_str = "failed"
 
             record = PostPublishResult(
                 post_id=post.id,
@@ -64,11 +96,16 @@ class PublishingService:
             results.append(record)
 
             # Phase 9: Record audit PublishingLog
+            event_type = (
+                PublishingLogEventType.skipped.value
+                if getattr(res, "skipped", False)
+                else (PublishingLogEventType.published.value if res.success else PublishingLogEventType.failed.value)
+            )
             log_entry = PublishingLog(
                 post_id=post.id,
                 social_account_id=account.id,
                 platform=platform_str,
-                event_type=PublishingLogEventType.published.value if res.success else PublishingLogEventType.failed.value,
+                event_type=event_type,
                 status=status_str,
                 attempt_number=1,
                 platform_post_id=res.platform_post_id,

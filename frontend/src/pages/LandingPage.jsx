@@ -31,10 +31,6 @@ export default function LandingPage() {
   const { isAuthenticated } = useAuth()
   const heroRef = useRef(null)
 
-  if (isAuthenticated) {
-    return <Navigate to="/dashboard" replace />
-  }
-
   useEffect(() => {
     const el = heroRef.current
     if (!el) return
@@ -48,6 +44,10 @@ export default function LandingPage() {
     window.addEventListener('mousemove', handle)
     return () => window.removeEventListener('mousemove', handle)
   }, [])
+
+  if (isAuthenticated) {
+    return <Navigate to="/dashboard" replace />
+  }
 
   return (
     <div className="landing body-bg">

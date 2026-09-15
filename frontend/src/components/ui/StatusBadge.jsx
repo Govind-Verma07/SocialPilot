@@ -1,26 +1,51 @@
 /**
  * src/components/ui/StatusBadge.jsx
- * Small pill badge indicating connection or workflow status.
+ * Clean Shadcn-style pill badges for post/account statuses.
+ * All existing status values preserved.
  */
 
 import './StatusBadge.css'
 
 const VARIANTS = {
-  connected:    { bg: 'rgba(16,185,129,0.12)', color: '#10b981', dot: '#10b981' },
-  success:      { bg: 'rgba(16,185,129,0.12)', color: '#10b981', dot: '#10b981' },
-  error:        { bg: 'rgba(239,68,68,0.12)',     color: '#ef4444', dot: '#ef4444' },
-  warning:      { bg: 'rgba(245,158,11,0.12)',    color: '#f59e0b', dot: '#f59e0b' },
-  info:         { bg: 'rgba(14,165,233,0.12)',    color: '#06b6d4', dot: '#06b6d4' },
-  disconnected: { bg: 'rgba(107,114,128,0.15)',   color: '#9ca3af', dot: '#9ca3af' },
-  pending:      { bg: 'rgba(107,114,128,0.12)',   color: '#9ca3af', dot: '#9ca3af' },
+  connected:    'success',
+  success:      'success',
+  published:    'success',
+  error:        'error',
+  failed:       'error',
+  warning:      'warning',
+  scheduled:    'warning',
+  processing:   'info',
+  info:         'info',
+  disconnected: 'muted',
+  pending:      'muted',
+  draft:        'muted',
+  skipped:      'muted',
+}
+
+const LABELS = {
+  connected:    'Connected',
+  success:      'Success',
+  published:    'Published',
+  error:        'Error',
+  failed:       'Failed',
+  warning:      'Warning',
+  scheduled:    'Scheduled',
+  processing:   'Processing',
+  info:         'Info',
+  disconnected: 'Disconnected',
+  pending:      'Pending',
+  draft:        'Draft',
+  skipped:      'Skipped',
 }
 
 export default function StatusBadge({ status, label, showDot = true, size = 'sm' }) {
-  const v = VARIANTS[status] || VARIANTS.pending
+  const variant = VARIANTS[status?.toLowerCase()] || 'muted'
+  const displayLabel = label || LABELS[status?.toLowerCase()] || status || 'Unknown'
+
   return (
-    <span className={`status-badge status-${status} size-${size}`} style={{ '--sb-bg': v.bg, '--sb-color': v.color, '--sb-dot': v.dot }}>
-      {showDot && <span className="status-dot" />}
-      {label}
+    <span className={`sp-status-badge sp-status-${variant} ${size === 'md' ? 'sp-status-md' : ''}`}>
+      {showDot && <span className="sp-status-dot" />}
+      {displayLabel}
     </span>
   )
 }

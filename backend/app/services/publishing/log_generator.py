@@ -67,20 +67,103 @@ def generate_post_audit_log_content(db: Session, post: Post, user: Optional[User
     if not account_lines:
         account_lines.append("  [No social accounts linked to this post]")
 
-    # Media attachments
-    media_lines = []
-    if post.media_urls and isinstance(post.media_urls, list) and len(post.media_urls) > 0:
+    # Media attachments resolution
+    resolved_media_items = []
+
+    # 1. First attempt: Query MongoDB content_posts & media_assets
+    try:
+        from app.db.mongodb import _mongo_client
+        from app.core.config import settings
+        if _mongo_client is not None:
+            sync_client = _mongo_client.delegate
+            mongo_db = sync_client[settings.effective_mongodb_database]
+            cp = mongo_db["content_posts"].find_one({"post_id": str(post.id)})
+            if cp:
+                raw_items = cp.get("media_items") or []
+                raw_ids = cp.get("media_ids") or []
+                ordered_ids = []
+                if raw_items:
+                    for idx, it in enumerate(raw_items, start=1):
+                        mid = it.get("media_id")
+                        if mid:
+                            pos = it.get("position", idx)
+                            ordered_ids.append((str(mid), int(pos)))
+                elif raw_ids:
+                    for idx, mid in enumerate(raw_ids, start=1):
+                        ordered_ids.append((str(mid), idx))
+                ordered_ids.sort(key=lambda x: x[1])
+
+                if ordered_ids:
+                    m_ids = [x[0] for x in ordered_ids]
+                    assets = list(mongo_db["media_assets"].find({"media_id": {"$in": m_ids}}))
+                    asset_map = {a["media_id"]: a for a in assets}
+                    for mid, pos in ordered_ids:
+                        a = asset_map.get(mid, {})
+                        resolved_media_items.append({
+                            "media_id": mid,
+                            "position": pos,
+                            "type": a.get("media_type", "image"),
+                            "mime_type": a.get("mime_type", "image/jpeg"),
+                            "filename": a.get("original_filename", "media"),
+                            "size_bytes": a.get("size_bytes", 0),
+                            "public_url": f"/api/v1/media/public/{mid}",
+                        })
+    except Exception:
+        pass
+
+    # 2. Second attempt: Check PostgreSQL post.media_urls
+    if not resolved_media_items and post.media_urls and isinstance(post.media_urls, list) and len(post.media_urls) > 0:
+        import re
         for idx, m_url in enumerate(post.media_urls, start=1):
-            media_lines.append(f"  [{idx}] {m_url}")
+            url_str = str(m_url).strip()
+            if not url_str:
+                continue
+            m_match = re.search(r"/api/v1/media/public/([a-f0-9\-]+)", url_str)
+            mid = m_match.group(1) if m_match else f"media_{idx}"
+            is_vid = any(url_str.lower().endswith(ext) for ext in (".mp4", ".mov", ".avi", ".webm"))
+            m_type = "video" if is_vid else "image"
+            resolved_media_items.append({
+                "media_id": mid,
+                "position": idx,
+                "type": m_type,
+                "mime_type": "video/mp4" if is_vid else "image/jpeg",
+                "filename": f"media_{idx}",
+                "size_bytes": 0,
+                "public_url": url_str,
+            })
+
+    # Build formatted media lines
+    media_lines = []
+    p_format = (post.post_type or "text").lower().strip()
+    if resolved_media_items:
+        for m in resolved_media_items:
+            media_lines.append(f"  • [Position {m['position']}]")
+            media_lines.append(f"    media_id:          {m['media_id']}")
+            media_lines.append(f"    type:              {m['type']}")
+            media_lines.append(f"    mime_type:         {m['mime_type']}")
+            media_lines.append(f"    filename:          {m['filename']}")
+            if m.get("size_bytes"):
+                media_lines.append(f"    size_bytes:        {m['size_bytes']}")
+            media_lines.append(f"    public_url:        {m['public_url']}")
     else:
-        media_lines.append("  [No media attachments - Pure text content post]")
+        if p_format in ("image", "video", "carousel", "story", "reel"):
+            media_lines.append(f"  [ERROR: No media attachments resolved for {p_format.upper()} post - pipeline error]")
+        else:
+            media_lines.append("  [No media attachments - Pure text content post]")
+
+    total_media_count = len(resolved_media_items)
 
     # Publishing Results (outcomes)
     result_lines = []
     if hasattr(post, "publish_results") and post.publish_results:
         for r in post.publish_results:
             p_time = r.published_at.strftime("%Y-%m-%d %H:%M:%S UTC") if r.published_at else "N/A"
-            status_tag = "SUCCESS" if r.status == "published" else "FAILED"
+            if r.status == "published":
+                status_tag = "SUCCESS"
+            elif r.status == "skipped":
+                status_tag = "SKIPPED"
+            else:
+                status_tag = "FAILED"
             result_lines.append(f"  • [{r.platform.upper()}] Status: {status_tag} | Time: {p_time}")
             result_lines.append(f"    Platform Post ID: {r.platform_post_id or 'N/A'}")
             result_lines.append(f"    Live URL:         {r.published_url or 'N/A'}")
@@ -153,12 +236,12 @@ def generate_post_audit_log_content(db: Session, post: Post, user: Optional[User
         sub_banner,
         f"Character Count      : {char_count} characters",
         f"Word Count           : {word_count} words",
-        f"Media Attachments    : {len(post.media_urls) if post.media_urls else 0} file(s)",
+        f"Media Attachments    : {total_media_count} file(s)",
         "",
         "[EXACT POST TEXT / CAPTION]:",
         content_text if content_text else "(Empty Content)",
         "",
-        "[ATTACHED MEDIA URLS]:",
+        "[ATTACHED MEDIA]:",
         *media_lines,
         "",
         "4. TARGET SOCIAL PLATFORMS & ACCOUNTS",

@@ -3,20 +3,20 @@ app/services/publishing/adapters/pinterest.py
 --------------------------------------------
 Pinterest Publishing Adapter using Pinterest API v5 Pins endpoint.
 Supports:
-1. Pins with custom uploaded images
-2. Text pins with auto-generated visual branded quote card
+1. Pins with custom uploaded images or videos.
+Text-only posts are not supported by Pinterest and are marked as SKIPPED.
 """
 
+from typing import Optional
 from datetime import datetime, timezone
-import random
 import httpx
 
 from app.core.encryption import decrypt_token
-from app.core.config import settings
 from app.models.enums import SocialPlatform
 from app.models.post import Post
 from app.models.social_account import SocialAccount
 from app.services.publishing.base import BasePlatformPublisher, PublishResult
+from app.services.publishing.media_resolver import PostPublishContext
 
 
 class PinterestPublisher(BasePlatformPublisher):
@@ -25,29 +25,39 @@ class PinterestPublisher(BasePlatformPublisher):
     PINS_URL = "https://api.pinterest.com/v5/pins"
     BOARDS_URL = "https://api.pinterest.com/v5/boards"
 
-    async def publish(self, post: Post, social_account: SocialAccount) -> PublishResult:
+    async def publish(
+        self,
+        post: Post,
+        social_account: SocialAccount,
+        context: Optional[PostPublishContext] = None,
+    ) -> PublishResult:
         raw_token = decrypt_token(social_account.access_token_encrypted) if getattr(social_account, "access_token_encrypted", None) else None
         if not raw_token:
-            if settings.APP_ENV == "development":
-                raw_token = "demo-token"
-            else:
-                return PublishResult(
-                    success=False,
-                    platform=self.platform,
-                    error_message="Pinterest access token is missing or invalid. Please reconnect your account.",
-                )
+            return PublishResult(
+                success=False,
+                platform=self.platform,
+                error_message="Pinterest access token is missing or invalid. Please reconnect your account.",
+            )
+
+        # Content requirement check: Pinterest requires image or video media
+        image_url = None
+        if context and context.primary_item and context.primary_item.public_url:
+            image_url = context.primary_item.public_url
+        elif post.media_urls:
+            image_url = post.media_urls[0]
+
+        if not image_url:
+            return PublishResult(
+                success=False,
+                platform=self.platform,
+                error_message="Pinterest requires image or video media.",
+                skipped=True,
+            )
 
         headers = {
             "Authorization": f"Bearer {raw_token}",
             "Content-Type": "application/json",
         }
-
-        # Determine visual image URL: if user uploaded image, use it; otherwise provide high-res visual card
-        media_urls = post.media_urls or []
-        if media_urls:
-            image_url = media_urls[0]
-        else:
-            image_url = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&auto=format&fit=crop&q=80"
 
         # Determine board ID
         board_id = getattr(social_account, "platform_account_id", None)
@@ -98,31 +108,12 @@ class PinterestPublisher(BasePlatformPublisher):
                     published_at=datetime.now(timezone.utc),
                 )
             elif resp.status_code == 401:
-                if raw_token.startswith(("mock-", "test-", "demo-")) or settings.APP_ENV == "development":
-                    mock_pin_id = str(random.randint(100000000000000000, 999999999999999999))
-                    return PublishResult(
-                        success=True,
-                        platform=self.platform,
-                        platform_post_id=mock_pin_id,
-                        published_url=f"https://www.pinterest.com/pin/{mock_pin_id}/",
-                        published_at=datetime.now(timezone.utc),
-                    )
                 return PublishResult(
                     success=False,
                     platform=self.platform,
                     error_message="Pinterest access token is expired or unauthorized (401). Please reconnect your Pinterest account.",
                 )
             else:
-                # If token is mock or in development, gracefully succeed with simulated Pin
-                if raw_token.startswith(("mock-", "test-", "demo-")) or settings.APP_ENV == "development":
-                    mock_pin_id = str(random.randint(100000000000000000, 999999999999999999))
-                    return PublishResult(
-                        success=True,
-                        platform=self.platform,
-                        platform_post_id=mock_pin_id,
-                        published_url=f"https://www.pinterest.com/pin/{mock_pin_id}/",
-                        published_at=datetime.now(timezone.utc),
-                    )
                 err_msg = f"Pinterest API error ({resp.status_code})"
                 try:
                     err_msg = resp.json().get("message") or err_msg
@@ -134,15 +125,6 @@ class PinterestPublisher(BasePlatformPublisher):
                     error_message=err_msg,
                 )
         except Exception as exc:
-            if raw_token.startswith(("mock-", "test-", "demo-")) or settings.APP_ENV == "development":
-                mock_pin_id = str(random.randint(100000000000000000, 999999999999999999))
-                return PublishResult(
-                    success=True,
-                    platform=self.platform,
-                    platform_post_id=mock_pin_id,
-                    published_url=f"https://www.pinterest.com/pin/{mock_pin_id}/",
-                    published_at=datetime.now(timezone.utc),
-                )
             return PublishResult(
                 success=False,
                 platform=self.platform,

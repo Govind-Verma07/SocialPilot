@@ -6,8 +6,7 @@
 
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import Sidebar from '../components/Sidebar'
-import Navbar from '../components/Navbar'
+import AppShell from '../components/AppShell'
 import Input from '../components/ui/Input'
 import Button from '../components/ui/Button'
 import GlowCard from '../components/ui/GlowCard'
@@ -65,16 +64,7 @@ export default function ProfilePage() {
     : '—'
 
   return (
-    <div className="app-layout body-bg">
-      <Sidebar mobileOpen={mobileNav} onCloseMobile={() => setMobileNav(false)} />
-
-      <main className="app-main">
-        <Navbar
-          pageTitle="Profile"
-          pageSubtitle="Manage your personal account details and public identity."
-          mobileMenuLabel="Open menu"
-          onMobileMenu={() => setMobileNav(true)}
-        />
+    <AppShell pageTitle="Profile" pageSubtitle="Manage your personal account details and public identity">
 
         <div className="profile-grid">
           {/* Profile Overview Card */}
@@ -179,7 +169,6 @@ export default function ProfilePage() {
             </form>
           </GlowCard>
         </div>
-      </main>
-    </div>
+    </AppShell>
   )
 }

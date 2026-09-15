@@ -116,3 +116,9 @@
     grid-template-columns: 1fr;
   }
 }
+
+@media (max-width: 768px) {
+  .profile-form-card {
+    padding: 20px 16px;
+  }
+}
