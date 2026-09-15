@@ -20,6 +20,7 @@ pymongo==4.7.3            # sync MongoDB driver (Motor dependency)
 # --- Authentication ---
 python-jose[cryptography]==3.3.0   # JWT
 passlib[bcrypt]==1.7.4             # password hashing (bcrypt)
+bcrypt==4.0.1                      # pinned for passlib 1.7.4 compatibility
 
 # --- Validation / Settings ---
 pydantic==2.8.2
