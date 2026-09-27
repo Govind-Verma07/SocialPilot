@@ -32,6 +32,7 @@ class FacebookProvider(BaseSocialProvider):
             "state": state,
             "scope": "pages_show_list,pages_read_engagement,pages_manage_posts,public_profile",
             "response_type": "code",
+            "auth_type": "rerequest",
         }
         return f"{self.AUTH_URL}?{urlencode(params)}"
 
@@ -63,12 +64,40 @@ class FacebookProvider(BaseSocialProvider):
             resp.raise_for_status()
             data = resp.json()
             pic_url = data.get("picture", {}).get("data", {}).get("url")
+
+            # Also attempt to fetch all Facebook Pages managed by this user
+            pages = []
+            try:
+                pages_resp = await client.get(
+                    "https://graph.facebook.com/v19.0/me/accounts",
+                    params={
+                        "fields": "id,name,access_token,picture.type(large),category",
+                        "access_token": access_token,
+                    },
+                    timeout=20.0,
+                )
+                if pages_resp.status_code == 200:
+                    pages_data = pages_resp.json().get("data", [])
+                    for p in pages_data:
+                        page_pic = p.get("picture", {}).get("data", {}).get("url")
+                        pages.append({
+                            "platform_account_id": str(p.get("id")),
+                            "account_name": p.get("name", "Facebook Page"),
+                            "account_username": p.get("name", "").lower().replace(" ", "_"),
+                            "access_token": p.get("access_token") or access_token,
+                            "profile_picture_url": page_pic or pic_url,
+                            "raw_metadata": p,
+                        })
+            except Exception:
+                pass
+
             return {
                 "platform_account_id": str(data.get("id")),
                 "account_name": data.get("name", "Facebook User"),
                 "account_username": data.get("name", "").lower().replace(" ", "_"),
                 "profile_picture_url": pic_url,
                 "raw_metadata": data,
+                "pages": pages,
             }
 
     async def refresh_access_token(self, refresh_token: str) -> Dict[str, Any]:

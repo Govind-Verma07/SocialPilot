@@ -51,47 +51,60 @@ class FacebookPublisher(BasePlatformPublisher):
                 page_id = target_id
                 page_access_token = raw_token
 
-                # For real OAuth tokens, obtain Page Access Token from user's Facebook token
+                # For real OAuth tokens, obtain Page Access Token
                 if not raw_token.startswith(("mock-", "test-", "demo-")):
-                    accounts_url = f"{self.GRAPH_BASE_URL}/me/accounts"
-                    acc_resp = await client.get(accounts_url, params={"access_token": raw_token}, timeout=20.0)
-
-                    if acc_resp.status_code != 200:
-                        err_data = {}
-                        try:
-                            err_data = acc_resp.json().get("error", {})
-                        except Exception:
-                            pass
-                        err_msg = err_data.get("message") or f"Failed to fetch Facebook Pages ({acc_resp.status_code})"
-                        return PublishResult(
-                            success=False,
-                            platform=self.platform,
-                            error_message=err_msg,
-                        )
-
-                    pages = acc_resp.json().get("data", [])
                     target_page = None
 
-                    # Find page matching platform_account_id
+                    # If target_id is a specific page ID, check if raw_token is already a valid page token
                     if target_id and target_id != "me":
-                        for p in pages:
-                            if str(p.get("id")) == str(target_id):
-                                target_page = p
-                                break
+                        try:
+                            direct_resp = await client.get(
+                                f"{self.GRAPH_BASE_URL}/{target_id}",
+                                params={"fields": "id,name,access_token", "access_token": raw_token},
+                                timeout=15.0,
+                            )
+                            if direct_resp.status_code == 200:
+                                d_json = direct_resp.json()
+                                target_page = {
+                                    "id": str(d_json.get("id") or target_id),
+                                    "access_token": d_json.get("access_token") or raw_token,
+                                    "name": d_json.get("name"),
+                                }
+                        except Exception:
+                            pass
 
-                    # If not matched directly, fallback to first managed page
-                    if not target_page and pages:
-                        target_page = pages[0]
+                    # If not resolved directly, query /me/accounts using user access token
+                    if not target_page:
+                        accounts_url = f"{self.GRAPH_BASE_URL}/me/accounts"
+                        acc_resp = await client.get(accounts_url, params={"access_token": raw_token}, timeout=20.0)
 
-                    # If still not found but a specific target_id exists, try direct page token query
-                    if not target_page and target_id and target_id != "me":
-                        page_token_resp = await client.get(
-                            f"{self.GRAPH_BASE_URL}/{target_id}",
-                            params={"fields": "access_token,name", "access_token": raw_token},
-                            timeout=20.0,
-                        )
-                        if page_token_resp.status_code == 200:
-                            target_page = page_token_resp.json()
+                        if acc_resp.status_code == 200:
+                            pages = acc_resp.json().get("data", [])
+                            # Find page matching platform_account_id
+                            if target_id and target_id != "me":
+                                for p in pages:
+                                    if str(p.get("id")) == str(target_id):
+                                        target_page = p
+                                        break
+                            # Fallback to first page if not matched
+                            if not target_page and pages:
+                                target_page = pages[0]
+                        else:
+                            # If /me/accounts failed but target_id != me, allow raw_token as page_access_token
+                            if target_id and target_id != "me":
+                                target_page = {"id": target_id, "access_token": raw_token}
+                            else:
+                                err_data = {}
+                                try:
+                                    err_data = acc_resp.json().get("error", {})
+                                except Exception:
+                                    pass
+                                err_msg = err_data.get("message") or f"Failed to fetch Facebook Pages ({acc_resp.status_code})"
+                                return PublishResult(
+                                    success=False,
+                                    platform=self.platform,
+                                    error_message=err_msg,
+                                )
 
                     if not target_page or not target_page.get("access_token"):
                         return PublishResult(

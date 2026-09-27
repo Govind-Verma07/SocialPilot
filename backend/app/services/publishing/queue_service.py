@@ -32,6 +32,26 @@ from app.services.publishing.base import PublishResult
 logger = logging.getLogger("socialpilot.queue")
 
 
+def _safe_notify_post(db, post, event: str, platform: str = None, error: str = None, url: str = None):
+    """Fire-and-forget helper: create a post notification without breaking publishing flow."""
+    try:
+        from app.services.notification_service import create_post_notification
+        preview = (post.content or "")[:120] if post else None
+        create_post_notification(
+            db=db,
+            user_id=post.user_id,
+            post_id=post.id,
+            event=event,
+            platform=platform,
+            post_content_preview=preview,
+            error_message=error,
+            published_url=url,
+        )
+    except Exception as n_exc:
+        logger.warning(f"Could not create post notification (non-fatal): {n_exc}")
+
+
+
 def sanitize_error_message(msg: Optional[str]) -> Optional[str]:
     """Sanitize sensitive keys, bearer tokens, or secrets from error logs."""
     if not msg:
@@ -502,6 +522,8 @@ def execute_publishing_job(db: Session, job_id: str) -> dict:
             platform_post_id=publish_res.platform_post_id,
             published_url=publish_res.published_url,
         )
+        # Notification: post successfully published
+        _safe_notify_post(db, post, "published", platform=platform_str, url=publish_res.published_url)
     else:
         job.last_error = publish_res.error_message
         is_transient = is_transient_error(publish_res.error_message)
@@ -545,6 +567,8 @@ def execute_publishing_job(db: Session, job_id: str) -> dict:
                 attempt_number=job.attempt_count,
                 error_message=publish_res.error_message,
             )
+            # Notification: permanent publishing failure
+            _safe_notify_post(db, post, "failed", platform=platform_str, error=publish_res.error_message)
 
     job.updated_at = now
     db.commit()

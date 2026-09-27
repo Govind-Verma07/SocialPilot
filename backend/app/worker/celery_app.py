@@ -33,6 +33,14 @@ celery_app.conf.update(
             "task": "app.worker.tasks.process_queued_and_retry_jobs",
             "schedule": 30.0,  # Scan for retrying jobs with elapsed backoff every 30 seconds
         },
+        "check-and-send-scheduled-reminders": {
+            "task": "app.worker.tasks.check_and_send_scheduled_reminders",
+            "schedule": 60.0,  # Scan for upcoming scheduled post reminders every minute
+        },
+        "sync-social-analytics-periodically": {
+            "task": "app.worker.tasks.sync_social_analytics_task",
+            "schedule": 300.0,  # Sync real platform analytics every 5 minutes
+        },
     },
 )
 

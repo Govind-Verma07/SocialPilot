@@ -127,6 +127,23 @@ class PublishingService:
         db.commit()
         db.refresh(post)
 
+        # Trigger notification & email delivery
+        try:
+            from app.services.notification_service import notify_post_published, notify_post_failed
+            if any_success:
+                # Find platform name and URL from successful results
+                succ_res = next((r for r in results if r.status == "published"), None)
+                plat = succ_res.platform if succ_res else None
+                url = succ_res.published_url if succ_res else None
+                notify_post_published(db, post, platform=plat, published_url=url)
+            else:
+                fail_res = next((r for r in results if r.status == "failed"), None)
+                plat = fail_res.platform if fail_res else None
+                err = fail_res.error_message if fail_res else None
+                notify_post_failed(db, post, platform=plat, error_message=err)
+        except Exception as notif_exc:
+            logger.warning(f"Could not dispatch publishing notification (non-fatal): {notif_exc}")
+
         # Generate and persist rich audit log with real post information to disk & cache
         try:
             from app.services.publishing.log_generator import generate_post_audit_log_content

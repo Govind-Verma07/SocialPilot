@@ -6,6 +6,7 @@
 
 import { BrowserRouter, Route, Routes, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
+import { NotificationProvider } from './context/NotificationContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import LandingPage       from './pages/LandingPage'
 import LoginPage         from './pages/LoginPage'
@@ -24,7 +25,8 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Routes>
+        <NotificationProvider>
+          <Routes>
           <Route path="/"          element={<LandingPage />} />
           <Route path="/login"     element={<LoginPage />} />
           <Route path="/register"  element={<RegisterPage />} />
@@ -103,6 +105,7 @@ export default function App() {
           {/* Catch-all → dashboard (ProtectedRoute will handle unauthenticated) */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
+        </NotificationProvider>
       </AuthProvider>
     </BrowserRouter>
   )

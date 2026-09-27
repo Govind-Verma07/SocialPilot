@@ -39,7 +39,8 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
-    # --- CORS ---
+    # --- Frontend & CORS ---
+    FRONTEND_URL: str = "http://localhost:5173"
     # Stored as a comma-separated string in .env; parsed into a list here.
     ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
 
@@ -83,6 +84,65 @@ class Settings(BaseSettings):
     # --- Phase 8: Publishing Queue & Retry ---
     MAX_PUBLISH_RETRIES: int = 3
     PUBLISH_RETRY_BACKOFF_SECONDS: str = "60,300,900"
+
+    # --- Real Email & SMTP Configuration (Notification Module) ---
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM_EMAIL: str = ""
+    SMTP_FROM_NAME: str = "SocialPilot"
+    SMTP_USE_TLS: bool = True
+    SMTP_USE_SSL: bool = False
+    SMTP_TIMEOUT_SECONDS: int = 15
+
+    @property
+    def smtp_configured(self) -> bool:
+        """True when minimum required SMTP host, username, and password credentials are set."""
+        return bool(self.SMTP_HOST and self.SMTP_USERNAME and self.SMTP_PASSWORD)
+
+    @property
+    def effective_from_email(self) -> str:
+        """Return sender email, defaulting to SMTP_USERNAME or noreply@socialpilot.io."""
+        return (self.SMTP_FROM_EMAIL or self.SMTP_USERNAME or "noreply@socialpilot.io").strip()
+
+
+    @property
+    def effective_frontend_url(self) -> str:
+        """
+        Return the resolved frontend base URL (without trailing slash).
+        Prioritizes FRONTEND_URL environment variable / settings.
+        Fallback to http://localhost:5173.
+        """
+        import os
+        # 1. Live environment variable (Render production, system env)
+        env_url = (os.getenv("FRONTEND_URL") or "").strip()
+        if env_url:
+            return env_url.rstrip("/")
+
+        # 2. Live .env file check for local development changes
+        try:
+            from dotenv import dotenv_values
+            from pathlib import Path
+            candidate_paths = [
+                Path(__file__).resolve().parents[2] / ".env",
+                Path.cwd() / ".env",
+            ]
+            for env_file in candidate_paths:
+                if env_file.exists():
+                    live_env = dotenv_values(str(env_file))
+                    val = live_env.get("FRONTEND_URL")
+                    if val and str(val).strip():
+                        return str(val).strip().rstrip("/")
+        except Exception:
+            pass
+
+        # 3. Configured setting loaded via pydantic-settings
+        if self.FRONTEND_URL and self.FRONTEND_URL.strip():
+            return self.FRONTEND_URL.strip().rstrip("/")
+
+        # 4. Fallback for local development
+        return "http://localhost:5173"
 
     @property
     def allowed_origins_list(self) -> List[str]:

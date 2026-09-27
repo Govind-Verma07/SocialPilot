@@ -325,10 +325,13 @@ def test_15_scheduled_auto_publishing_submits_task(client, db_session):
     db_session.add(PostSocialAccount(post_id=post.id, social_account_id=acc.id))
     db_session.commit()
 
-    with patch("app.worker.tasks.SessionLocal", return_value=db_session), \
+    post_id = post.id
+    from tests.conftest import TestingSessionLocal
+
+    with patch("app.worker.tasks.SessionLocal", side_effect=TestingSessionLocal), \
          patch("app.worker.tasks.publish_single_post_task.delay") as mock_task_delay:
         result = check_and_publish_due_posts()
 
     assert result["dispatched_count"] >= 1
-    assert post.id in result["post_ids"]
-    mock_task_delay.assert_any_call(post.id)
+    assert post_id in result["post_ids"]
+    mock_task_delay.assert_any_call(post_id)

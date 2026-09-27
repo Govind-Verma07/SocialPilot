@@ -32,7 +32,7 @@ class YouTubeProvider(BaseSocialProvider):
             "response_type": "code",
             "scope": "https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube.upload",
             "access_type": "offline",
-            "prompt": "consent",
+            "prompt": "select_account consent",
             "state": state,
         }
         return f"{self.AUTH_URL}?{urlencode(params)}"

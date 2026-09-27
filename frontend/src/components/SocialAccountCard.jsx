@@ -171,9 +171,9 @@ export default function SocialAccountCard({
           </h4>
           <p
             className="sp-account-subtitle"
-            title={a.account_username ? `@${a.account_username}` : meta.label}
+            title={a.account_username ? `@${a.account_username}` : (a.platform_account_id ? `ID: ${a.platform_account_id}` : meta.label)}
           >
-            {a.account_username ? `@${a.account_username}` : meta.label}
+            {a.account_username ? `@${a.account_username}` : (a.platform_account_id ? `ID: ${a.platform_account_id}` : meta.label)}
           </p>
         </div>
       </div>
@@ -212,12 +212,14 @@ export default function SocialAccountCard({
           </button>
         )}
         <button
-          id={`disconnect-${platformKey}-btn`}
+          id={`disconnect-${platformKey}-${a.id}-btn`}
+          data-account-id={a.id}
+          data-platform={platformKey}
           type="button"
           className="sp-btn-disconnect social-card-disconnect"
           onClick={() => onDisconnect && onDisconnect(a)}
           disabled={disconnectLoading}
-          title="Disconnect account"
+          title="Disconnect this account"
         >
           <Unlink size={13} />
           <span>{disconnectLoading ? 'Disconnecting…' : 'Disconnect'}</span>

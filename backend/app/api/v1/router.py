@@ -22,6 +22,9 @@ from app.api.v1.endpoints.posts import (
 )
 from app.api.v1.endpoints.recurring_posts import router as recurring_posts_router
 from app.api.v1.endpoints.media import router as media_router
+from app.api.v1.endpoints.campaigns import router as campaigns_router
+from app.api.v1.endpoints.analytics import router as analytics_router
+from app.api.v1.endpoints.notifications import router as notifications_router
 from app.schemas.post import PostListResponse
 
 v1_router = APIRouter()
@@ -33,6 +36,9 @@ v1_router.include_router(social_router, prefix="/social", tags=["Social"])
 v1_router.include_router(posts_router, prefix="/posts", tags=["Posts"])
 v1_router.include_router(media_router, prefix="/media", tags=["Media"])
 v1_router.include_router(recurring_posts_router, prefix="/recurring-posts", tags=["Recurring Posts"])
+v1_router.include_router(campaigns_router, prefix="/campaigns", tags=["Campaigns"])
+v1_router.include_router(analytics_router, prefix="/analytics", tags=["Analytics"])
+v1_router.include_router(notifications_router, prefix="/notifications", tags=["Notifications"])
 
 # Compatibility aliases
 v1_router.include_router(recurring_posts_router, prefix="/recurring", tags=["Recurring Posts Alias"])

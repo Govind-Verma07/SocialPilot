@@ -34,6 +34,7 @@ class XProvider(BaseSocialProvider):
             "state": state,
             "code_challenge": "challenge",
             "code_challenge_method": "plain",
+            "force_login": "true",
         }
         return f"{self.AUTH_URL}?{urlencode(params)}"
 

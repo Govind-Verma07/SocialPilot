@@ -165,14 +165,17 @@ def test_5_scheduled_posts_queried_and_dispatched_via_beat_task(client, db_sessi
     db_session.add(PostSocialAccount(post_id=post.id, social_account_id=acc.id))
     db_session.commit()
 
-    with patch("app.worker.tasks.SessionLocal", return_value=db_session), \
+    post_id = post.id
+    from tests.conftest import TestingSessionLocal
+
+    with patch("app.worker.tasks.SessionLocal", side_effect=TestingSessionLocal), \
          patch("app.worker.tasks.publish_single_post_task.delay") as mock_single_task, \
          patch("app.worker.tasks.process_publishing_job.delay") as mock_job_task:
         result = check_and_publish_due_posts()
 
     assert result["dispatched_count"] >= 1
-    assert post.id in result["post_ids"]
-    mock_single_task.assert_any_call(post.id)
+    assert post_id in result["post_ids"]
+    mock_single_task.assert_any_call(post_id)
     mock_job_task.assert_called()
 
 

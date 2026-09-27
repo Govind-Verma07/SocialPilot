@@ -203,7 +203,7 @@ async def oauth_callback(
     Validates state, exchanges code for tokens, retrieves profile, encrypts tokens,
     and updates PostgreSQL and MongoDB records.
     """
-    frontend_base = settings.allowed_origins_list[0] if settings.allowed_origins_list else "http://localhost:5173"
+    frontend_base = settings.effective_frontend_url
 
     try:
         if error:
@@ -256,15 +256,93 @@ async def oauth_callback(
         profile_picture_url = profile_data.get("profile_picture_url")
         raw_metadata = profile_data.get("raw_metadata", {})
 
-        # Check existing account
+        now = datetime.now(timezone.utc)
+        expires_at = datetime.fromtimestamp(now.timestamp() + expires_in, tz=timezone.utc) if expires_in else None
+
+        pages_to_connect = profile_data.get("pages") or []
+        if pages_to_connect:
+            # Multi-account / multi-page handling (e.g. Facebook Pages)
+            connected_names = []
+            for page in pages_to_connect:
+                p_acc_id = str(page.get("platform_account_id"))
+                p_name = page.get("account_name", f"{provider.display_name} Page")
+                p_username = page.get("account_username", "")
+                p_token = page.get("access_token") or access_token
+                p_pic = page.get("profile_picture_url")
+                p_meta = page.get("raw_metadata", {})
+
+                existing_page_acc = db.query(SocialAccount).filter(
+                    SocialAccount.user_id == user_id,
+                    SocialAccount.platform == provider.platform.value,
+                    SocialAccount.platform_account_id == p_acc_id,
+                ).first()
+
+                if existing_page_acc:
+                    acc = existing_page_acc
+                    acc.account_name = p_name
+                    acc.account_username = p_username
+                    acc.status = AccountStatus.connected.value
+                    acc.access_token_encrypted = encrypt_token(p_token)
+                    if refresh_token:
+                        acc.refresh_token_encrypted = encrypt_token(refresh_token)
+                    acc.token_expires_at = expires_at
+                    acc.last_synced_at = now
+                    if team_id:
+                        acc.team_id = team_id
+                else:
+                    acc = SocialAccount(
+                        user_id=user_id,
+                        team_id=team_id,
+                        platform=provider.platform.value,
+                        platform_account_id=p_acc_id,
+                        account_name=p_name,
+                        account_username=p_username,
+                        status=AccountStatus.connected.value,
+                        access_token_encrypted=encrypt_token(p_token),
+                        refresh_token_encrypted=encrypt_token(refresh_token) if refresh_token else None,
+                        token_expires_at=expires_at,
+                        connected_at=now,
+                        last_synced_at=now,
+                    )
+                    db.add(acc)
+                    db.commit()
+                    db.refresh(acc)
+
+                    for perm_name in provider.supported_permissions:
+                        perm = AccountPermission(
+                            social_account_id=acc.id,
+                            permission=perm_name,
+                            granted=True,
+                        )
+                        db.add(perm)
+
+                sync_log = AccountSyncLog(
+                    social_account_id=acc.id,
+                    status=SyncStatus.success.value,
+                    message="Account successfully connected via OAuth 2.0 handshake.",
+                    synced_at=now,
+                )
+                db.add(sync_log)
+                db.commit()
+
+                await save_social_metadata(
+                    social_account_id=acc.id,
+                    platform=provider.platform.value,
+                    raw_metadata=p_meta,
+                    profile_picture_url=p_pic,
+                )
+                connected_names.append(p_name)
+
+            logger.info("Successfully connected %d %s account(s): %s", len(pages_to_connect), platform, ", ".join(connected_names))
+            params = urlencode({"connected": provider.platform.value, "status": "success"})
+            return RedirectResponse(f"{frontend_base}/accounts?{params}", status_code=status.HTTP_302_FOUND)
+
+        # Standard single identity flow
         existing_account = db.query(SocialAccount).filter(
             SocialAccount.user_id == user_id,
             SocialAccount.platform == provider.platform.value,
             SocialAccount.platform_account_id == platform_account_id,
         ).first()
-
-        now = datetime.now(timezone.utc)
-        expires_at = datetime.fromtimestamp(now.timestamp() + expires_in, tz=timezone.utc) if expires_in else None
 
         if existing_account:
             account = existing_account

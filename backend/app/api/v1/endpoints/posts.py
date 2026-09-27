@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.enums import PostStatus
 from app.models.post import Post, PostSocialAccount
+from app.models.campaign import Campaign
 from app.models.publishing_log import PublishingLog
 from app.models.social_account import SocialAccount
 from app.models.user import User
@@ -123,6 +124,7 @@ def _serialize_post(post: Post) -> dict:
         "id": post.id,
         "user_id": post.user_id,
         "team_id": post.team_id,
+        "campaign_id": getattr(post, "campaign_id", None),
         "content": post.content,
         "media_urls": post.media_urls or [],
         "media_ids": [],
@@ -249,6 +251,15 @@ async def create_scheduled_post(
                 )
             verified_accounts.append(account)
 
+    # 6. Campaign validation: must belong to the user if specified
+    if payload.campaign_id:
+        campaign = db.query(Campaign).filter(Campaign.id == payload.campaign_id).first()
+        if not campaign or campaign.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Selected campaign is not available.",
+            )
+
     try:
         media_urls = list(payload.media_urls or [])
         if not media_urls and effective_media_ids:
@@ -256,6 +267,7 @@ async def create_scheduled_post(
 
         post = Post(
             user_id=current_user.id,
+            campaign_id=payload.campaign_id,
             content=(payload.content or "").strip(),
             media_urls=media_urls,
             post_type=p_type,
@@ -296,6 +308,24 @@ async def create_scheduled_post(
         post_dict["media_ids"] = effective_media_ids
         post_dict["media_items"] = effective_media_items
         post_dict["metadata"] = payload.metadata or {}
+
+        # Notification: post scheduled
+        if target_status == "scheduled":
+            try:
+                from app.services.notification_service import create_post_notification
+                platforms = [acc.platform.value if hasattr(acc.platform, "value") else str(acc.platform) for acc in verified_accounts]
+                platform_label = ", ".join(p.title() for p in platforms) if platforms else "your social accounts"
+                create_post_notification(
+                    db=db,
+                    user_id=current_user.id,
+                    post_id=post.id,
+                    event="scheduled",
+                    platform=platform_label,
+                    post_content_preview=(post.content or "")[:120],
+                )
+            except Exception:
+                pass
+
         return PostResponse(**post_dict)
 
     except HTTPException:
@@ -588,6 +618,18 @@ async def update_post(
         post.media_urls = payload.media_urls
     if (not post.media_urls or len(post.media_urls) == 0) and effective_media_ids:
         post.media_urls = [MediaService.get_public_media_url(mid) for mid in effective_media_ids]
+
+    if payload.campaign_id is not None:
+        if payload.campaign_id:
+            campaign = db.query(Campaign).filter(Campaign.id == payload.campaign_id).first()
+            if not campaign or campaign.user_id != current_user.id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Selected campaign is not available.",
+                )
+            post.campaign_id = payload.campaign_id
+        else:
+            post.campaign_id = None
 
     post.updated_at = datetime.now(timezone.utc)
     db.commit()

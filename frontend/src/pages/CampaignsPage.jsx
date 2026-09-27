@@ -1,446 +1,1105 @@
 /**
  * src/pages/CampaignsPage.jsx
  * ----------------------------
- * Campaign Management & Performance Tracking Module.
- * Features Target Social Accounts list with "Select All" option,
- * Campaign Objectives with "Other (Custom)" option, and standard Date & Time selection.
+ * Milestone 3: Production-Ready Campaign Management & Tracking Module.
+ * Fully integrated with backend API for authenticated CRUD, post association,
+ * real execution progress, financial tracking, and transparent ROI calculation.
  */
 
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect, useCallback } from 'react'
 import AppShell from '../components/AppShell'
 import GlowCard from '../components/ui/GlowCard'
 import Button from '../components/ui/Button'
 import StatusBadge from '../components/ui/StatusBadge'
 import EmptyState from '../components/ui/EmptyState'
+import campaignsApi from '../api/campaignsApi'
+import postsApi from '../api/postsApi'
 import './CampaignsPage.css'
 
-const ALL_PLATFORMS = [
-  { id: 'facebook', label: 'Facebook Pages', icon: '📘' },
-  { id: 'instagram', label: 'Instagram Business', icon: '📸' },
-  { id: 'linkedin', label: 'LinkedIn Company', icon: '💼' },
+const PLATFORMS = [
+  { id: 'all', label: 'All Platforms', icon: '🌐' },
+  { id: 'multi', label: 'Multi-Platform', icon: '✨' },
+  { id: 'facebook', label: 'Facebook', icon: '📘' },
+  { id: 'instagram', label: 'Instagram', icon: '📸' },
+  { id: 'linkedin', label: 'LinkedIn', icon: '💼' },
   { id: 'x', label: 'X (Twitter)', icon: '𝕏' },
-  { id: 'youtube', label: 'YouTube Channel', icon: '▶️' },
-  { id: 'pinterest', label: 'Pinterest Board', icon: '📌' },
+  { id: 'youtube', label: 'YouTube', icon: '▶️' },
+  { id: 'pinterest', label: 'Pinterest', icon: '📌' },
 ]
 
-const INITIAL_CAMPAIGNS = [
-  {
-    id: 'cmp-1',
-    name: 'Q3 Product Awareness & Growth',
-    platform: 'Multi-Platform (FB, IG, LinkedIn)',
-    startDate: '2026-09-01',
-    endDate: '2026-09-30',
-    budget: '$2,500',
-    objective: 'Brand Awareness & Engagement',
-    status: 'active',
-    reach: '45.2K',
-    conversions: '1,240',
-    roi: '+240%',
-  },
-  {
-    id: 'cmp-2',
-    name: 'Fall Influencer & Creator Showcase',
-    platform: 'Instagram & YouTube',
-    startDate: '2026-09-10',
-    endDate: '2026-10-15',
-    budget: '$4,000',
-    objective: 'Lead Generation & Conversions',
-    status: 'scheduled',
-    reach: '—',
-    conversions: '—',
-    roi: 'Pending',
-  },
-  {
-    id: 'cmp-3',
-    name: 'SMB Founder Masterclass Webinar',
-    platform: 'LinkedIn & X (Twitter)',
-    startDate: '2026-08-15',
-    endDate: '2026-08-30',
-    budget: '$1,200',
-    objective: 'Webinar Registrations',
-    status: 'completed',
-    reach: '28.9K',
-    conversions: '890',
-    roi: '+185%',
-  },
+const OBJECTIVES = [
+  'Brand Awareness',
+  'Lead Generation',
+  'Product Launch',
+  'Website Traffic',
+  'Conversions & Sales',
+  'Community Engagement',
+  'Event / Webinar Registration',
+  'Other (Custom)',
 ]
 
 export default function CampaignsPage() {
-  const navigate = useNavigate()
-  const [campaigns, setCampaigns] = useState(INITIAL_CAMPAIGNS)
+  const [campaigns, setCampaigns] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [successNotice, setSuccessNotice] = useState('')
+
+  // Filters
+  const [statusFilter, setStatusFilter] = useState('')
+  const [platformFilter, setPlatformFilter] = useState('all')
+  const [searchTerm, setSearchTerm] = useState('')
+
+  // Modals state
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [showDetailsModal, setShowDetailsModal] = useState(false)
+  const [showAttachPostsModal, setShowAttachPostsModal] = useState(false)
 
-  const handleDeleteCampaign = (campaignId) => {
-    setCampaigns((prev) => prev.filter((c) => c.id !== campaignId))
-  }
+  // Active / Selected Campaign
+  const [selectedCampaign, setSelectedCampaign] = useState(null)
+  const [campaignPosts, setCampaignPosts] = useState([])
+  const [loadingPosts, setLoadingPosts] = useState(false)
 
-  // Selected Social Media Accounts (default: all)
-  const [selectedPlatforms, setSelectedPlatforms] = useState(ALL_PLATFORMS.map((p) => p.id))
-  
-  // Custom Platform / Objective "Other" state
-  const [objectiveOption, setObjectiveOption] = useState('Brand Awareness')
-  const [customObjective, setCustomObjective] = useState('')
-  const [platformOption, setPlatformOption] = useState('multi') // 'multi' or 'other'
-  const [customPlatform, setCustomPlatform] = useState('')
+  // Posts available to attach
+  const [availablePosts, setAvailablePosts] = useState([])
+  const [selectedPostIdsToAttach, setSelectedPostIdsToAttach] = useState([])
+  const [submittingAction, setSubmittingAction] = useState(false)
 
-  // New Campaign Form State
+  // Form State for Create / Edit
   const [form, setForm] = useState({
     name: '',
-    startDate: '2026-09-01',
-    endDate: '2026-09-30',
-    budget: '$1,000',
+    description: '',
+    platform: 'multi',
+    objective: 'Brand Awareness',
+    customObjective: '',
+    start_date: '',
+    end_date: '',
+    budget: '',
+    revenue: '',
+    conversions: 0,
+    status: 'active',
   })
 
-  // Select All Social Media Accounts Handler
-  const isAllSelected = selectedPlatforms.length === ALL_PLATFORMS.length
+  // Flash banner helper
+  const showNotice = (msg) => {
+    setSuccessNotice(msg)
+    setTimeout(() => setSuccessNotice(''), 4000)
+  }
 
-  const handleToggleSelectAll = () => {
-    if (isAllSelected) {
-      setSelectedPlatforms([])
-    } else {
-      setSelectedPlatforms(ALL_PLATFORMS.map((p) => p.id))
+  // Load Campaigns
+  const fetchCampaigns = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const params = {}
+      if (statusFilter) params.status = statusFilter
+      if (platformFilter && platformFilter !== 'all') params.platform = platformFilter
+      if (searchTerm.trim()) params.search = searchTerm.trim()
+
+      const res = await campaignsApi.getCampaigns(params)
+      setCampaigns(res.data.items || [])
+    } catch (err) {
+      console.error('Failed to fetch campaigns:', err)
+      setError(err.response?.data?.detail || 'Failed to load campaigns.')
+    } finally {
+      setLoading(false)
+    }
+  }, [statusFilter, platformFilter, searchTerm])
+
+  useEffect(() => {
+    fetchCampaigns()
+  }, [fetchCampaigns])
+
+  // Open Details Modal & Load Campaign Posts
+  const handleOpenDetails = async (camp) => {
+    setSelectedCampaign(camp)
+    setShowDetailsModal(true)
+    try {
+      setLoadingPosts(true)
+      const res = await campaignsApi.getCampaignPosts(camp.id)
+      setCampaignPosts(res.data.items || [])
+    } catch (err) {
+      console.error('Failed to load campaign posts:', err)
+    } finally {
+      setLoadingPosts(false)
     }
   }
 
-  const handleTogglePlatform = (id) => {
-    setSelectedPlatforms((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    )
+  // Open Create Modal
+  const handleOpenCreate = () => {
+    const today = new Date().toISOString().slice(0, 16)
+    const nextMonth = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16)
+    setForm({
+      name: '',
+      description: '',
+      platform: 'multi',
+      objective: 'Brand Awareness',
+      customObjective: '',
+      start_date: today,
+      end_date: nextMonth,
+      budget: '1000',
+      revenue: '',
+      conversions: 0,
+      status: 'active',
+    })
+    setShowCreateModal(true)
   }
 
-  const handleChange = (e) => {
-    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }))
+  // Open Edit Modal
+  const handleOpenEdit = (camp) => {
+    setSelectedCampaign(camp)
+    const isCustomObj = !OBJECTIVES.includes(camp.objective) && camp.objective !== ''
+    setForm({
+      name: camp.name || '',
+      description: camp.description || '',
+      platform: camp.platform || 'multi',
+      objective: isCustomObj ? 'Other (Custom)' : (camp.objective || 'Brand Awareness'),
+      customObjective: isCustomObj ? camp.objective : '',
+      start_date: camp.start_date ? new Date(camp.start_date).toISOString().slice(0, 16) : '',
+      end_date: camp.end_date ? new Date(camp.end_date).toISOString().slice(0, 16) : '',
+      budget: camp.budget !== undefined && camp.budget !== null ? String(camp.budget) : '0',
+      revenue: camp.revenue !== undefined && camp.revenue !== null ? String(camp.revenue) : '',
+      conversions: camp.conversions || 0,
+      status: camp.status || 'active',
+    })
+    setShowEditModal(true)
   }
 
-  const handleCreateCampaign = (e) => {
+  // Submit Create
+  const handleCreateSubmit = async (e) => {
     e.preventDefault()
     if (!form.name.trim()) return
 
-    // Resolve objective text
-    const finalObjective =
-      objectiveOption === 'Other'
-        ? customObjective.trim() || 'Custom Objective'
-        : objectiveOption
-
-    // Resolve platform text
-    let finalPlatform = ''
-    if (platformOption === 'Other') {
-      finalPlatform = customPlatform.trim() || 'Custom Channels'
-    } else if (selectedPlatforms.length === ALL_PLATFORMS.length) {
-      finalPlatform = 'All 6 Social Platforms'
-    } else if (selectedPlatforms.length === 0) {
-      finalPlatform = 'Custom Platform Selection'
-    } else {
-      finalPlatform = selectedPlatforms
-        .map((id) => ALL_PLATFORMS.find((p) => p.id === id)?.label.split(' ')[0])
-        .join(', ')
+    try {
+      setSubmittingAction(true)
+      const effObjective = form.objective === 'Other (Custom)' ? (form.customObjective.trim() || 'Custom Goal') : form.objective
+      const payload = {
+        name: form.name.trim(),
+        description: form.description.trim() || null,
+        platform: form.platform,
+        objective: effObjective,
+        start_date: form.start_date ? new Date(form.start_date).toISOString() : null,
+        end_date: form.end_date ? new Date(form.end_date).toISOString() : null,
+        budget: parseFloat(form.budget) || 0.0,
+        revenue: form.revenue !== '' ? parseFloat(form.revenue) : null,
+        conversions: parseInt(form.conversions, 10) || 0,
+        status: form.status,
+      }
+      await campaignsApi.createCampaign(payload)
+      setShowCreateModal(false)
+      showNotice(`🎉 Campaign "${form.name}" created successfully!`)
+      fetchCampaigns()
+    } catch (err) {
+      console.error('Error creating campaign:', err)
+      alert(err.response?.data?.detail || 'Failed to create campaign.')
+    } finally {
+      setSubmittingAction(false)
     }
-
-    const newCampaign = {
-      id: `cmp-${Date.now()}`,
-      name: form.name.trim(),
-      platform: finalPlatform,
-      startDate: form.startDate,
-      endDate: form.endDate,
-      budget: form.budget.startsWith('$') ? form.budget : `$${form.budget}`,
-      objective: finalObjective,
-      status: 'active',
-      reach: '0',
-      conversions: '0',
-      roi: '0%',
-    }
-
-    setCampaigns([newCampaign, ...campaigns])
-    setForm({ name: '', startDate: '2026-09-01', endDate: '2026-09-30', budget: '$1,000' })
-    setObjectiveOption('Brand Awareness')
-    setCustomObjective('')
-    setPlatformOption('multi')
-    setCustomPlatform('')
-    setShowCreateModal(false)
   }
 
+  // Submit Edit
+  const handleEditSubmit = async (e) => {
+    e.preventDefault()
+    if (!selectedCampaign || !form.name.trim()) return
+
+    try {
+      setSubmittingAction(true)
+      const effObjective = form.objective === 'Other (Custom)' ? (form.customObjective.trim() || 'Custom Goal') : form.objective
+      const payload = {
+        name: form.name.trim(),
+        description: form.description.trim() || null,
+        platform: form.platform,
+        objective: effObjective,
+        start_date: form.start_date ? new Date(form.start_date).toISOString() : null,
+        end_date: form.end_date ? new Date(form.end_date).toISOString() : null,
+        budget: parseFloat(form.budget) || 0.0,
+        revenue: form.revenue !== '' ? parseFloat(form.revenue) : null,
+        conversions: parseInt(form.conversions, 10) || 0,
+        status: form.status,
+      }
+      await campaignsApi.updateCampaign(selectedCampaign.id, payload)
+      setShowEditModal(false)
+      showNotice(`✅ Campaign "${form.name}" updated successfully!`)
+      fetchCampaigns()
+      if (showDetailsModal && selectedCampaign) {
+        const updated = await campaignsApi.getCampaign(selectedCampaign.id)
+        setSelectedCampaign(updated.data)
+      }
+    } catch (err) {
+      console.error('Error updating campaign:', err)
+      alert(err.response?.data?.detail || 'Failed to update campaign.')
+    } finally {
+      setSubmittingAction(false)
+    }
+  }
+
+  // Submit Delete
+  const handleDeleteSubmit = async () => {
+    if (!selectedCampaign) return
+    try {
+      setSubmittingAction(true)
+      await campaignsApi.deleteCampaign(selectedCampaign.id)
+      setShowDeleteModal(false)
+      setShowDetailsModal(false)
+      showNotice(`🗑️ Campaign "${selectedCampaign.name}" deleted.`)
+      fetchCampaigns()
+    } catch (err) {
+      console.error('Error deleting campaign:', err)
+      alert(err.response?.data?.detail || 'Failed to delete campaign.')
+    } finally {
+      setSubmittingAction(false)
+    }
+  }
+
+  // Detach Post
+  const handleDetachPost = async (postId) => {
+    if (!selectedCampaign) return
+    try {
+      await campaignsApi.detachPost(selectedCampaign.id, postId)
+      setCampaignPosts((prev) => prev.filter((p) => p.id !== postId))
+      showNotice('Post detached from campaign.')
+      const updated = await campaignsApi.getCampaign(selectedCampaign.id)
+      setSelectedCampaign(updated.data)
+      fetchCampaigns()
+    } catch (err) {
+      console.error('Error detaching post:', err)
+      alert(err.response?.data?.detail || 'Failed to detach post.')
+    }
+  }
+
+  // Open Attach Posts Modal
+  const handleOpenAttachPosts = async () => {
+    try {
+      setSelectedPostIdsToAttach([])
+      setShowAttachPostsModal(true)
+      const res = await postsApi.getPosts({ limit: 100 })
+      const allUserPosts = res.data.items || []
+      // Filter posts that are not already in this campaign
+      const attachedIds = new Set(campaignPosts.map((p) => p.id))
+      const available = allUserPosts.filter((p) => !attachedIds.has(p.id))
+      setAvailablePosts(available)
+    } catch (err) {
+      console.error('Error fetching available posts:', err)
+    }
+  }
+
+  // Submit Attach Posts
+  const handleAttachPostsSubmit = async () => {
+    if (!selectedCampaign || selectedPostIdsToAttach.length === 0) return
+    try {
+      setSubmittingAction(true)
+      await campaignsApi.attachPosts(selectedCampaign.id, selectedPostIdsToAttach)
+      setShowAttachPostsModal(false)
+      showNotice(`Attached ${selectedPostIdsToAttach.length} post(s) to campaign!`)
+      // Refresh campaign posts and campaign details
+      const postsRes = await campaignsApi.getCampaignPosts(selectedCampaign.id)
+      setCampaignPosts(postsRes.data.items || [])
+      const updatedCamp = await campaignsApi.getCampaign(selectedCampaign.id)
+      setSelectedCampaign(updatedCamp.data)
+      fetchCampaigns()
+    } catch (err) {
+      console.error('Error attaching posts:', err)
+      alert(err.response?.data?.detail || 'Failed to attach posts.')
+    } finally {
+      setSubmittingAction(false)
+    }
+  }
+
+  // Calculate Overview Totals
+  const totalCampaigns = campaigns.length
+  const activeCampaigns = campaigns.filter((c) => c.status === 'active').length
+  const totalBudget = campaigns.reduce((sum, c) => sum + (c.budget || 0), 0)
+  const totalRevenue = campaigns.reduce((sum, c) => sum + (c.revenue || 0), 0)
+  const totalConversions = campaigns.reduce((sum, c) => sum + (c.conversions || 0), 0)
+
   return (
-    <AppShell pageTitle="Campaigns" pageSubtitle="Create, track, and monitor social campaign objectives and performance">
-        {/* Top Header Row */}
-        <div className="campaigns-top-bar">
-          <div>
-            <h2 className="section-heading">Active & Scheduled Campaigns</h2>
-            <p className="section-subheading" style={{ marginBottom: 0 }}>
-              Group content into targeted campaigns across all connected social channels.
-            </p>
-          </div>
-          <Button variant="primary" onClick={() => setShowCreateModal(!showCreateModal)}>
-            {showCreateModal ? '✕ Cancel' : '+ Create Campaign'}
-          </Button>
+    <AppShell
+      pageTitle="Campaign Management"
+      pageSubtitle="Plan, execute, and measure multi-channel social media marketing campaigns"
+    >
+      <div className="campaigns-page-container">
+        {/* Top KPI Header Cards */}
+        <div className="campaigns-kpi-grid">
+          <GlowCard className="campaign-kpi-card" hover>
+            <div className="kpi-label">Total Campaigns</div>
+            <div className="kpi-value">{totalCampaigns}</div>
+            <div className="kpi-subtext">{activeCampaigns} active currently</div>
+          </GlowCard>
+
+          <GlowCard className="campaign-kpi-card" hover>
+            <div className="kpi-label">Total Allocated Budget</div>
+            <div className="kpi-value">${totalBudget.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+            <div className="kpi-subtext">Across all marketing initiatives</div>
+          </GlowCard>
+
+          <GlowCard className="campaign-kpi-card" hover>
+            <div className="kpi-label">Tracked Revenue</div>
+            <div className="kpi-value" style={{ color: totalRevenue > 0 ? '#10b981' : '#94a3b8' }}>
+              {totalRevenue > 0 ? `$${totalRevenue.toLocaleString()}` : '—'}
+            </div>
+            <div className="kpi-subtext">
+              {totalRevenue > 0 ? `${totalConversions} goal conversions` : 'Revenue tracking optional'}
+            </div>
+          </GlowCard>
+
+          <GlowCard className="campaign-kpi-card" hover>
+            <div className="kpi-label">Tracked Conversions</div>
+            <div className="kpi-value" style={{ color: '#c084fc' }}>{totalConversions}</div>
+            <div className="kpi-subtext">Goals & lead acquisitions</div>
+          </GlowCard>
         </div>
 
-        {/* Create Campaign Form Card */}
-        {showCreateModal && (
-          <GlowCard style={{ padding: '28px' }} hover>
-            <h3 className="section-heading">Launch New Campaign</h3>
-            <form onSubmit={handleCreateCampaign} style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '16px' }}>
-              {/* Campaign Name */}
-              <div className="form-group">
-                <label className="form-label">Campaign Name</label>
-                <input
-                  type="text"
-                  name="name"
-                  className="form-input"
-                  placeholder="e.g. Q4 Black Friday Promo"
-                  value={form.name}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
+        {/* Action & Filter Toolbar */}
+        <div className="campaigns-toolbar">
+          <div className="toolbar-left">
+            {/* Search Input */}
+            <div className="search-box">
+              <span className="search-icon">🔍</span>
+              <input
+                type="text"
+                placeholder="Search campaigns..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="campaign-search-input"
+              />
+              {searchTerm && (
+                <button className="clear-search-btn" onClick={() => setSearchTerm('')}>
+                  ✕
+                </button>
+              )}
+            </div>
 
-              {/* Social Media Account Selection List with SELECT ALL */}
-              <div className="form-group">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                  <label className="form-label">Select Social Media Accounts / Channels</label>
-                  <button
-                    type="button"
-                    onClick={handleToggleSelectAll}
-                    style={{
-                      background: 'rgba(124, 58, 237, 0.15)',
-                      border: '1px solid rgba(124, 58, 237, 0.4)',
-                      color: '#c084fc',
-                      padding: '4px 12px',
-                      borderRadius: '8px',
-                      fontSize: '12px',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {isAllSelected ? '✓ Unselect All' : '☐ Select All (All 6 Platforms)'}
-                  </button>
-                </div>
+            {/* Platform Filter */}
+            <select
+              className="campaign-filter-select"
+              value={platformFilter}
+              onChange={(e) => setPlatformFilter(e.target.value)}
+            >
+              {PLATFORMS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.icon} {p.label}
+                </option>
+              ))}
+            </select>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px' }}>
-                  {ALL_PLATFORMS.map((p) => {
-                    const isChecked = selectedPlatforms.includes(p.id)
-                    return (
-                      <div
-                        key={p.id}
-                        onClick={() => handleTogglePlatform(p.id)}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '10px',
-                          padding: '10px 14px',
-                          borderRadius: '10px',
-                          background: isChecked ? 'rgba(124, 58, 237, 0.15)' : 'rgba(255, 255, 255, 0.03)',
-                          border: isChecked ? '1px solid #a855f7' : '1px solid rgba(255, 255, 255, 0.08)',
-                          color: isChecked ? '#ffffff' : '#94a3b8',
-                          cursor: 'pointer',
-                          fontSize: '13px',
-                          fontWeight: 600,
-                          transition: 'all 0.2s',
+            {/* Status Pills */}
+            <div className="status-pills">
+              {['', 'active', 'scheduled', 'completed', 'draft', 'paused'].map((st) => (
+                <button
+                  key={st || 'all'}
+                  className={`status-pill-btn ${statusFilter === st ? 'active' : ''}`}
+                  onClick={() => setStatusFilter(st)}
+                >
+                  {st ? st.charAt(0).toUpperCase() + st.slice(1) : 'All Statuses'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="toolbar-right">
+            <Button variant="primary" onClick={handleOpenCreate} id="btn-create-campaign">
+              ✨ Create Campaign
+            </Button>
+          </div>
+        </div>
+
+        {/* Flash Success Notification */}
+        {successNotice && (
+          <div className="alert alert-success" style={{ marginBottom: '16px', animation: 'fadeIn 0.2s ease' }}>
+            <span>{successNotice}</span>
+          </div>
+        )}
+
+        {/* Error Alert */}
+        {error && (
+          <div className="alert alert-danger" style={{ marginBottom: '16px' }}>
+            <span>{error}</span>
+          </div>
+        )}
+
+        {/* Campaigns Grid */}
+        {loading ? (
+          <div className="campaigns-loading-state">
+            <div className="spinner" />
+            <p>Loading campaigns & execution metrics...</p>
+          </div>
+        ) : campaigns.length === 0 ? (
+          <EmptyState
+            icon="🎯"
+            title="No campaigns found"
+            description={searchTerm || statusFilter || platformFilter !== 'all' ? "Try clearing your search or status filters." : "Create your first marketing campaign to organize posts, track budgets, and calculate real ROI."}
+            action={
+              <Button variant="primary" onClick={handleOpenCreate}>
+                ✨ Create First Campaign
+              </Button>
+            }
+          />
+        ) : (
+          <div className="campaigns-grid">
+            {campaigns.map((camp) => {
+              const stats = camp.tracking || camp.tracking_stats || {}
+              const totalPosts = stats.total_posts || 0
+              const publishedPosts = stats.published_posts || 0
+              const scheduledPosts = stats.scheduled_posts || 0
+              const progress = stats.progress_percentage || 0
+              const roiAvailable = stats.roi_available || (camp.revenue !== null && camp.revenue !== undefined)
+              const roiVal = stats.roi_percentage
+
+              return (
+                <GlowCard key={camp.id} className="campaign-card" hover>
+                  <div className="campaign-card-header">
+                    <div className="campaign-title-block">
+                      <div className="campaign-platform-pill">
+                        {PLATFORMS.find((p) => p.id === camp.platform)?.icon || '🌐'} {camp.platform || 'Multi'}
+                      </div>
+                      <h3 className="campaign-name">{camp.name}</h3>
+                      {camp.objective && (
+                        <span className="campaign-objective-tag">🎯 {camp.objective}</span>
+                      )}
+                    </div>
+                    <StatusBadge status={camp.status} />
+                  </div>
+
+                  {camp.description && (
+                    <p className="campaign-desc">{camp.description}</p>
+                  )}
+
+                  {/* Timeframe */}
+                  <div className="campaign-timeframe">
+                    <span>🗓️ {camp.start_date ? new Date(camp.start_date).toLocaleDateString() : 'Start TBD'}</span>
+                    <span className="timeframe-arrow">→</span>
+                    <span>{camp.end_date ? new Date(camp.end_date).toLocaleDateString() : 'Ongoing'}</span>
+                  </div>
+
+                  {/* Financial & Performance Row */}
+                  <div className="campaign-metrics-row">
+                    <div className="c-metric">
+                      <span className="c-label">Budget</span>
+                      <span className="c-val">${(camp.budget || 0).toLocaleString()}</span>
+                    </div>
+                    <div className="c-metric">
+                      <span className="c-label">Revenue</span>
+                      <span className="c-val" style={{ color: camp.revenue ? '#10b981' : '#94a3b8' }}>
+                        {camp.revenue !== null && camp.revenue !== undefined ? `$${Number(camp.revenue).toLocaleString()}` : '—'}
+                      </span>
+                    </div>
+                    <div className="c-metric">
+                      <span className="c-label">ROI</span>
+                      <span className="c-val" style={{ color: roiAvailable ? (roiVal >= 0 ? '#10b981' : '#ef4444') : '#94a3b8' }}>
+                        {roiAvailable ? `${roiVal >= 0 ? '+' : ''}${roiVal}%` : 'Not Tracked'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Execution Progress Bar */}
+                  <div className="campaign-progress-section">
+                    <div className="progress-label-row">
+                      <span>Execution ({publishedPosts}/{totalPosts} posts published)</span>
+                      <span>{progress}%</span>
+                    </div>
+                    <div className="progress-bar-track">
+                      <div className="progress-bar-fill" style={{ width: `${progress}%` }} />
+                    </div>
+                    <div className="progress-sub-counts">
+                      <span>⏳ {scheduledPosts} scheduled</span>
+                      <span>📝 {stats.draft_posts || 0} drafts</span>
+                      <span>❤️ {stats.real_engagement || 0} engagements</span>
+                    </div>
+                  </div>
+
+                  {/* Card Actions Footer */}
+                  <div className="campaign-card-footer">
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => handleOpenDetails(camp)}
+                      className="details-btn"
+                    >
+                      👁️ Details & Posts ({totalPosts})
+                    </Button>
+                    <div className="quick-actions">
+                      <button
+                        className="icon-action-btn"
+                        title="Edit Campaign"
+                        onClick={() => handleOpenEdit(camp)}
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        className="icon-action-btn delete"
+                        title="Delete Campaign"
+                        onClick={() => {
+                          setSelectedCampaign(camp)
+                          setShowDeleteModal(true)
                         }}
                       >
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => {}} // handled by parent onClick
-                          style={{ accentColor: '#a855f7', width: '16px', height: '16px' }}
-                        />
-                        <span>{p.icon}</span>
-                        <span>{p.label}</span>
+                        🗑️
+                      </button>
+                    </div>
+                  </div>
+                </GlowCard>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 1. CREATE CAMPAIGN MODAL */}
+      {/* ========================================================================= */}
+      {showCreateModal && (
+        <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
+          <div className="modal-content campaign-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>✨ Create New Campaign</h3>
+              <button className="modal-close" onClick={() => setShowCreateModal(false)}>✕</button>
+            </div>
+            <form onSubmit={handleCreateSubmit}>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label>Campaign Title <span className="req">*</span></label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Q4 Black Friday Launch"
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    className="form-input"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Description & Notes</label>
+                  <textarea
+                    rows={2}
+                    placeholder="Brief overview of target audience, themes, or goals..."
+                    value={form.description}
+                    onChange={(e) => setForm({ ...form, description: e.target.value })}
+                    className="form-input"
+                  />
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group half">
+                    <label>Target Platform</label>
+                    <select
+                      value={form.platform}
+                      onChange={(e) => setForm({ ...form, platform: e.target.value })}
+                      className="form-input"
+                    >
+                      {PLATFORMS.filter((p) => p.id !== 'all').map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.icon} {p.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="form-group half">
+                    <label>Status</label>
+                    <select
+                      value={form.status}
+                      onChange={(e) => setForm({ ...form, status: e.target.value })}
+                      className="form-input"
+                    >
+                      <option value="active">Active</option>
+                      <option value="scheduled">Scheduled</option>
+                      <option value="draft">Draft</option>
+                      <option value="paused">Paused</option>
+                      <option value="completed">Completed</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Campaign Objective</label>
+                  <select
+                    value={form.objective}
+                    onChange={(e) => setForm({ ...form, objective: e.target.value })}
+                    className="form-input"
+                  >
+                    {OBJECTIVES.map((obj) => (
+                      <option key={obj} value={obj}>{obj}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {form.objective === 'Other (Custom)' && (
+                  <div className="form-group">
+                    <label>Custom Objective Description <span className="req">*</span></label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Specify your custom campaign objective..."
+                      value={form.customObjective}
+                      onChange={(e) => setForm({ ...form, customObjective: e.target.value })}
+                      className="form-input"
+                    />
+                  </div>
+                )}
+
+                <div className="form-row">
+                  <div className="form-group half">
+                    <label>Kickoff Date & Time</label>
+                    <input
+                      type="datetime-local"
+                      value={form.start_date}
+                      onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+                      className="form-input"
+                    />
+                  </div>
+
+                  <div className="form-group half">
+                    <label>Conclusion Date & Time</label>
+                    <input
+                      type="datetime-local"
+                      value={form.end_date}
+                      onChange={(e) => setForm({ ...form, end_date: e.target.value })}
+                      className="form-input"
+                    />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group third">
+                    <label>Budget (USD $)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="1000"
+                      value={form.budget}
+                      onChange={(e) => setForm({ ...form, budget: e.target.value })}
+                      className="form-input"
+                    />
+                  </div>
+
+                  <div className="form-group third">
+                    <label>Revenue (Optional $)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="Optional"
+                      value={form.revenue}
+                      onChange={(e) => setForm({ ...form, revenue: e.target.value })}
+                      className="form-input"
+                    />
+                  </div>
+
+                  <div className="form-group third">
+                    <label>Conversions Goal</label>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="0"
+                      value={form.conversions}
+                      onChange={(e) => setForm({ ...form, conversions: e.target.value })}
+                      className="form-input"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <Button variant="outline" type="button" onClick={() => setShowCreateModal(false)}>
+                  Cancel
+                </Button>
+                <Button variant="primary" type="submit" disabled={submittingAction}>
+                  {submittingAction ? 'Creating...' : 'Create Campaign'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 2. EDIT CAMPAIGN MODAL */}
+      {/* ========================================================================= */}
+      {showEditModal && (
+        <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
+          <div className="modal-content campaign-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>✏️ Edit Campaign</h3>
+              <button className="modal-close" onClick={() => setShowEditModal(false)}>✕</button>
+            </div>
+            <form onSubmit={handleEditSubmit}>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label>Campaign Title <span className="req">*</span></label>
+                  <input
+                    type="text"
+                    required
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    className="form-input"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Description</label>
+                  <textarea
+                    rows={2}
+                    value={form.description}
+                    onChange={(e) => setForm({ ...form, description: e.target.value })}
+                    className="form-input"
+                  />
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group half">
+                    <label>Target Platform</label>
+                    <select
+                      value={form.platform}
+                      onChange={(e) => setForm({ ...form, platform: e.target.value })}
+                      className="form-input"
+                    >
+                      {PLATFORMS.filter((p) => p.id !== 'all').map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.icon} {p.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="form-group half">
+                    <label>Status</label>
+                    <select
+                      value={form.status}
+                      onChange={(e) => setForm({ ...form, status: e.target.value })}
+                      className="form-input"
+                    >
+                      <option value="active">Active</option>
+                      <option value="scheduled">Scheduled</option>
+                      <option value="draft">Draft</option>
+                      <option value="paused">Paused</option>
+                      <option value="completed">Completed</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Campaign Objective</label>
+                  <select
+                    value={form.objective}
+                    onChange={(e) => setForm({ ...form, objective: e.target.value })}
+                    className="form-input"
+                  >
+                    {OBJECTIVES.map((obj) => (
+                      <option key={obj} value={obj}>{obj}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {form.objective === 'Other (Custom)' && (
+                  <div className="form-group">
+                    <label>Custom Objective Description</label>
+                    <input
+                      type="text"
+                      value={form.customObjective}
+                      onChange={(e) => setForm({ ...form, customObjective: e.target.value })}
+                      className="form-input"
+                    />
+                  </div>
+                )}
+
+                <div className="form-row">
+                  <div className="form-group half">
+                    <label>Kickoff Date & Time</label>
+                    <input
+                      type="datetime-local"
+                      value={form.start_date}
+                      onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+                      className="form-input"
+                    />
+                  </div>
+
+                  <div className="form-group half">
+                    <label>Conclusion Date & Time</label>
+                    <input
+                      type="datetime-local"
+                      value={form.end_date}
+                      onChange={(e) => setForm({ ...form, end_date: e.target.value })}
+                      className="form-input"
+                    />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group third">
+                    <label>Budget ($)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={form.budget}
+                      onChange={(e) => setForm({ ...form, budget: e.target.value })}
+                      className="form-input"
+                    />
+                  </div>
+
+                  <div className="form-group third">
+                    <label>Revenue ($)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="Optional"
+                      value={form.revenue}
+                      onChange={(e) => setForm({ ...form, revenue: e.target.value })}
+                      className="form-input"
+                    />
+                  </div>
+
+                  <div className="form-group third">
+                    <label>Conversions</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={form.conversions}
+                      onChange={(e) => setForm({ ...form, conversions: e.target.value })}
+                      className="form-input"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <Button variant="outline" type="button" onClick={() => setShowEditModal(false)}>
+                  Cancel
+                </Button>
+                <Button variant="primary" type="submit" disabled={submittingAction}>
+                  {submittingAction ? 'Saving...' : 'Save Changes'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 3. CAMPAIGN DETAILS & POSTS MODAL / DRAWER */}
+      {/* ========================================================================= */}
+      {showDetailsModal && selectedCampaign && (
+        <div className="modal-overlay" onClick={() => setShowDetailsModal(false)}>
+          <div className="modal-content campaign-details-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="details-header-title">
+                <div className="campaign-platform-pill">
+                  {PLATFORMS.find((p) => p.id === selectedCampaign.platform)?.icon || '🌐'} {selectedCampaign.platform || 'Multi'}
+                </div>
+                <h3>{selectedCampaign.name}</h3>
+                <StatusBadge status={selectedCampaign.status} />
+              </div>
+              <button className="modal-close" onClick={() => setShowDetailsModal(false)}>✕</button>
+            </div>
+
+            <div className="modal-body">
+              {/* Campaign Key Numbers Grid */}
+              <div className="details-stats-bar">
+                <div className="stat-item">
+                  <div className="s-label">Budget</div>
+                  <div className="s-val">${(selectedCampaign.budget || 0).toLocaleString()}</div>
+                </div>
+                <div className="stat-item">
+                  <div className="s-label">Revenue</div>
+                  <div className="s-val" style={{ color: selectedCampaign.revenue ? '#10b981' : '#94a3b8' }}>
+                    {selectedCampaign.revenue !== null && selectedCampaign.revenue !== undefined ? `$${Number(selectedCampaign.revenue).toLocaleString()}` : 'Not Tracked'}
+                  </div>
+                </div>
+                <div className="stat-item">
+                  <div className="s-label">Conversions</div>
+                  <div className="s-val">{selectedCampaign.conversions || 0}</div>
+                </div>
+                <div className="stat-item">
+                  <div className="s-label">Calculated ROI</div>
+                  <div className="s-val" style={{ color: (selectedCampaign.tracking?.roi_available || selectedCampaign.revenue !== null) ? '#10b981' : '#94a3b8' }}>
+                    {selectedCampaign.tracking?.roi_percentage !== null && selectedCampaign.tracking?.roi_percentage !== undefined
+                      ? `${selectedCampaign.tracking.roi_percentage >= 0 ? '+' : ''}${selectedCampaign.tracking.roi_percentage}%`
+                      : (selectedCampaign.revenue ? 'Calculated' : 'Revenue Needed')}
+                  </div>
+                </div>
+              </div>
+
+              {/* Attached Posts Header & Action */}
+              <div className="attached-posts-header">
+                <div>
+                  <h4 style={{ margin: '0 0 4px 0', fontSize: '15px', color: '#f1f5f9' }}>
+                    Campaign Posts ({campaignPosts.length})
+                  </h4>
+                  <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8' }}>
+                    All scheduled, published, and draft posts attached to this campaign.
+                  </p>
+                </div>
+                <Button variant="primary" size="sm" onClick={handleOpenAttachPosts}>
+                  ➕ Attach Existing Posts
+                </Button>
+              </div>
+
+              {/* Posts List */}
+              {loadingPosts ? (
+                <div className="posts-loading-box">
+                  <div className="spinner" />
+                  <span>Loading campaign posts...</span>
+                </div>
+              ) : campaignPosts.length === 0 ? (
+                <div className="no-posts-box">
+                  <p>No posts currently attached to this campaign.</p>
+                  <Button variant="outline" size="sm" onClick={handleOpenAttachPosts}>
+                    Attach Posts Now
+                  </Button>
+                </div>
+              ) : (
+                <div className="campaign-posts-list">
+                  {campaignPosts.map((p) => {
+                    const postStatus = p.status || 'draft'
+                    const pType = p.post_type || 'text'
+                    const accounts = p.social_accounts || []
+
+                    return (
+                      <div key={p.id} className="campaign-post-item">
+                        <div className="post-item-left">
+                          <span className="post-type-icon">
+                            {pType === 'image' ? '🖼️' : pType === 'video' ? '🎬' : pType === 'carousel' ? '🎠' : '📝'}
+                          </span>
+                          <div className="post-item-info">
+                            <p className="post-item-content">{p.content || '(No text content)'}</p>
+                            <div className="post-item-meta">
+                              <StatusBadge status={postStatus} />
+                              <span>Type: {pType}</span>
+                              {accounts.length > 0 && (
+                                <span>Accounts: {accounts.map((a) => a.account_name || a.platform).join(', ')}</span>
+                              )}
+                              {p.scheduled_at && (
+                                <span>🗓️ Scheduled: {new Date(p.scheduled_at).toLocaleString()}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="post-item-right">
+                          <button
+                            className="detach-post-btn"
+                            title="Remove post from campaign"
+                            onClick={() => handleDetachPost(p.id)}
+                          >
+                            Detach ✕
+                          </button>
+                        </div>
                       </div>
                     )
                   })}
                 </div>
-              </div>
+              )}
+            </div>
 
-              {/* Target Platform Option (Preset or Other) */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <div className="form-group">
-                  <label className="form-label">Platform Grouping / Option</label>
-                  <select
-                    className="form-input form-select"
-                    value={platformOption}
-                    onChange={(e) => setPlatformOption(e.target.value)}
-                  >
-                    <option value="multi">Selected Social Media Accounts ({selectedPlatforms.length})</option>
-                    <option value="Other">Other (Write Custom Channels...)</option>
-                  </select>
-
-                  {platformOption === 'Other' && (
-                    <input
-                      type="text"
-                      className="form-input"
-                      style={{ marginTop: '8px' }}
-                      placeholder="Write custom channels (e.g. TikTok, WhatsApp, Threads)..."
-                      value={customPlatform}
-                      onChange={(e) => setCustomPlatform(e.target.value)}
-                      required
-                    />
-                  )}
-                </div>
-
-                {/* Campaign Objective with "Other" option */}
-                <div className="form-group">
-                  <label className="form-label">Campaign Objective</label>
-                  <select
-                    className="form-input form-select"
-                    value={objectiveOption}
-                    onChange={(e) => setObjectiveOption(e.target.value)}
-                  >
-                    <option value="Brand Awareness">Brand Awareness</option>
-                    <option value="Lead Generation & Signups">Lead Generation & Signups</option>
-                    <option value="Website Traffic & Sales">Website Traffic & Sales</option>
-                    <option value="Audience Engagement">Audience Engagement</option>
-                    <option value="Other">Other (Write Custom Objective...)</option>
-                  </select>
-
-                  {objectiveOption === 'Other' && (
-                    <input
-                      type="text"
-                      className="form-input"
-                      style={{ marginTop: '8px' }}
-                      placeholder="Write your custom objective (e.g. Mobile App Installs)..."
-                      value={customObjective}
-                      onChange={(e) => setCustomObjective(e.target.value)}
-                      required
-                    />
-                  )}
-                </div>
-              </div>
-
-              {/* Standard Date Selection */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <div className="form-group">
-                  <label className="form-label">Start Date 📅</label>
-                  <input
-                    type="date"
-                    name="startDate"
-                    className="form-input"
-                    value={form.startDate}
-                    onChange={handleChange}
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">End Date 📅</label>
-                  <input
-                    type="date"
-                    name="endDate"
-                    className="form-input"
-                    value={form.endDate}
-                    onChange={handleChange}
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Campaign Budget */}
-              <div className="form-group">
-                <label className="form-label">Campaign Budget ($ USD)</label>
-                <input
-                  type="text"
-                  name="budget"
-                  className="form-input"
-                  placeholder="$2,500"
-                  value={form.budget}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
-                <Button type="button" variant="ghost" onClick={() => setShowCreateModal(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit" variant="primary">
-                  Save & Launch Campaign 🚀
-                </Button>
-              </div>
-            </form>
-          </GlowCard>
-        )}
-
-        {/* Campaigns Grid List */}
-        {campaigns.length === 0 ? (
-          <EmptyState
-            icon="🎯"
-            title="No campaigns created"
-            description="Organize your posts into campaigns to track ROI, budget, and performance."
-            actionLabel="Create First Campaign"
-            onAction={() => setShowCreateModal(true)}
-            size="md"
-          />
-        ) : (
-          <div className="campaigns-grid">
-            {campaigns.map((cmp) => (
-              <GlowCard key={cmp.id} className="campaign-card" hover>
-                <div className="campaign-card-header">
-                  <div>
-                    <div className="campaign-title">{cmp.name}</div>
-                    <span className="campaign-platform-badge">{cmp.platform}</span>
-                  </div>
-                  <StatusBadge
-                    status={cmp.status === 'active' ? 'success' : cmp.status === 'completed' ? 'info' : 'warning'}
-                    label={cmp.status}
-                    showDot
-                  />
-                </div>
-
-                <div className="campaign-details-list">
-                  <div className="campaign-detail-row">
-                    <span className="campaign-detail-lbl">Objective</span>
-                    <span className="campaign-detail-val">{cmp.objective}</span>
-                  </div>
-                  <div className="campaign-detail-row">
-                    <span className="campaign-detail-lbl">Duration</span>
-                    <span className="campaign-detail-val">{cmp.startDate} → {cmp.endDate}</span>
-                  </div>
-                  <div className="campaign-detail-row">
-                    <span className="campaign-detail-lbl">Budget</span>
-                    <span className="campaign-detail-val" style={{ color: '#10b981' }}>{cmp.budget}</span>
-                  </div>
-                </div>
-
-                {/* Metrics */}
-                <div className="campaign-metrics-row">
-                  <div className="campaign-metric-box">
-                    <span className="metric-num">{cmp.reach}</span>
-                    <span className="metric-txt">Reach</span>
-                  </div>
-                  <div className="campaign-metric-box">
-                    <span className="metric-num">{cmp.conversions}</span>
-                    <span className="metric-txt">Conversions</span>
-                  </div>
-                  <div className="campaign-metric-box">
-                    <span className="metric-num" style={{ color: '#c084fc' }}>{cmp.roi}</span>
-                    <span className="metric-txt">ROI</span>
-                  </div>
-                </div>
-
-                {/* Campaign Actions */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '12px', borderTop: '1px solid rgba(255, 255, 255, 0.06)', marginTop: '4px' }}>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => navigate('/posts?tab=create')}
-                    title="Schedule a post for this campaign"
-                  >
-                    + Schedule Post
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDeleteCampaign(cmp.id)}
-                    style={{ color: '#ef4444', padding: '4px 8px' }}
-                    title="Delete this campaign"
-                  >
-                    🗑️ Delete
-                  </Button>
-                </div>
-              </GlowCard>
-            ))}
+            <div className="modal-footer">
+              <Button variant="outline" onClick={() => setShowDetailsModal(false)}>
+                Close
+              </Button>
+              <Button variant="primary" onClick={() => handleOpenEdit(selectedCampaign)}>
+                ✏️ Edit Campaign Settings
+              </Button>
+            </div>
           </div>
-        )}
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 4. ATTACH POSTS MODAL */}
+      {/* ========================================================================= */}
+      {showAttachPostsModal && (
+        <div className="modal-overlay" onClick={() => setShowAttachPostsModal(false)}>
+          <div className="modal-content attach-posts-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>➕ Attach Posts to Campaign</h3>
+              <button className="modal-close" onClick={() => setShowAttachPostsModal(false)}>✕</button>
+            </div>
+
+            <div className="modal-body">
+              <p style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '14px' }}>
+                Select posts to associate with <strong>{selectedCampaign?.name}</strong>:
+              </p>
+
+              {availablePosts.length === 0 ? (
+                <div className="no-available-posts">
+                  <p>All your existing posts are already attached to this campaign, or you haven't created any posts yet.</p>
+                </div>
+              ) : (
+                <div className="attach-posts-selector-list">
+                  {availablePosts.map((p) => {
+                    const isChecked = selectedPostIdsToAttach.includes(p.id)
+                    return (
+                      <label key={p.id} className={`attach-post-row ${isChecked ? 'selected' : ''}`}>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {
+                            if (isChecked) {
+                              setSelectedPostIdsToAttach((prev) => prev.filter((id) => id !== p.id))
+                            } else {
+                              setSelectedPostIdsToAttach((prev) => [...prev, p.id])
+                            }
+                          }}
+                        />
+                        <div className="attach-post-preview">
+                          <span className="post-text">{p.content || '(No text content)'}</span>
+                          <span className="post-sub">Status: {p.status} | Type: {p.post_type}</span>
+                        </div>
+                      </label>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="modal-footer">
+              <Button variant="outline" onClick={() => setShowAttachPostsModal(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                disabled={submittingAction || selectedPostIdsToAttach.length === 0}
+                onClick={handleAttachPostsSubmit}
+              >
+                {submittingAction ? 'Attaching...' : `Attach Selected (${selectedPostIdsToAttach.length})`}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 5. DELETE CONFIRMATION MODAL */}
+      {/* ========================================================================= */}
+      {showDeleteModal && selectedCampaign && (
+        <div className="modal-overlay" onClick={() => setShowDeleteModal(false)}>
+          <div className="modal-content delete-confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>⚠️ Delete Campaign</h3>
+              <button className="modal-close" onClick={() => setShowDeleteModal(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <p>
+                Are you sure you want to delete <strong>{selectedCampaign.name}</strong>?
+              </p>
+              <p style={{ fontSize: '13px', color: '#94a3b8' }}>
+                Your posts and performance metrics will be preserved, but will no longer be linked to this campaign.
+              </p>
+            </div>
+            <div className="modal-footer">
+              <Button variant="outline" onClick={() => setShowDeleteModal(false)}>
+                Cancel
+              </Button>
+              <Button variant="danger" disabled={submittingAction} onClick={handleDeleteSubmit}>
+                {submittingAction ? 'Deleting...' : 'Confirm Delete'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppShell>
   )
 }

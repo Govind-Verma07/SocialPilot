@@ -231,7 +231,7 @@ async def google_oauth_callback(
     links or creates user account with default role (never Administrator),
     generates application JWT, and redirects to frontend.
     """
-    frontend_base = settings.allowed_origins_list[0] if settings.allowed_origins_list else "http://localhost:5173"
+    frontend_base = settings.effective_frontend_url
 
     if error:
         err_msg = quote(error_description or error or "Google login was cancelled or failed.")

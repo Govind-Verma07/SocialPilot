@@ -110,6 +110,21 @@ export default function Sidebar({ mobileOpen, onCloseMobile, collapsed, onToggle
     return location.pathname === pathname && !new URLSearchParams(location.search).get('tab')
   }
 
+  const handleNavClick = (item, e) => {
+    onCloseMobile?.()
+    if (item.label === 'Posts') {
+      if (location.pathname === '/posts') {
+        const queueEl = document.getElementById('post-queue-section')
+        if (queueEl) {
+          e.preventDefault()
+          queueEl.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          queueEl.classList.add('destination-highlight')
+          setTimeout(() => queueEl.classList.remove('destination-highlight'), 2000)
+        }
+      }
+    }
+  }
+
   return (
     <>
       {mobileOpen && <div className="sidebar-backdrop" onClick={onCloseMobile} />}
@@ -150,7 +165,7 @@ export default function Sidebar({ mobileOpen, onCloseMobile, collapsed, onToggle
                     key={item.path + item.label}
                     to={item.path}
                     className={`sp-nav-item ${active ? 'active' : ''}`}
-                    onClick={onCloseMobile}
+                    onClick={(e) => handleNavClick(item, e)}
                     title={collapsed ? item.label : undefined}
                   >
                     <span className="sp-nav-icon">

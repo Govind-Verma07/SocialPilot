@@ -230,15 +230,17 @@ def check_and_publish_due_posts():
 
         dispatched_ids = []
         for post in due_posts:
-            logger.info(f"Dispatching due post #{post.id} (scheduled_at={post.scheduled_at})")
+            post_id = post.id
+            post_sched = post.scheduled_at
+            logger.info(f"Dispatching due post #{post_id} (scheduled_at={post_sched})")
             try:
-                jobs = enqueue_publishing_jobs(db, post.id)
+                jobs = enqueue_publishing_jobs(db, post_id)
                 for j in jobs:
                     process_publishing_job.delay(j.id)
             except Exception as e:
-                logger.warning(f"Could not enqueue jobs for due post #{post.id}: {e}")
-            publish_single_post_task.delay(post.id)
-            dispatched_ids.append(post.id)
+                logger.warning(f"Could not enqueue jobs for due post #{post_id}: {e}")
+            publish_single_post_task.delay(post_id)
+            dispatched_ids.append(post_id)
 
         # Also process any retrying jobs whose backoff time has elapsed
         retry_res = process_queued_and_retry_jobs()
@@ -250,3 +252,241 @@ def check_and_publish_due_posts():
         }
     finally:
         db.close()
+
+
+# ---------------------------------------------------------------------------
+# Notification Module: Real Email Task & Scheduled Reminders
+# ---------------------------------------------------------------------------
+from app.models.notification import Notification
+from app.models.user import User
+from app.models.user_settings import UserSettings
+from app.services.email_service import EmailService, EmailTemplates
+
+
+@celery_app.task(
+    name="app.worker.tasks.send_notification_email_task",
+    bind=True,
+    max_retries=3,
+    default_retry_delay=60,
+)
+def send_notification_email_task(self, notification_id: str):
+    """
+    Asynchronous Celery task that delivers a real email for a Notification record.
+    1. Fetches notification and user records.
+    2. Checks idempotency (does not re-send if already 'sent').
+    3. Checks user notification preferences.
+    4. Renders responsive HTML template according to notification type.
+    5. Delivers email via SMTP.
+    6. Updates notification email_status, email_sent_at, email_error.
+    7. Retries transient connection errors up to max_retries with backoff.
+    """
+    db: Session = SessionLocal()
+    try:
+        notif = db.query(Notification).filter(Notification.id == notification_id).first()
+        if not notif:
+            logger.warning(f"send_notification_email_task: Notification #{notification_id} not found.")
+            return {"status": "not_found", "notification_id": notification_id}
+
+        # Idempotency: skip if already sent
+        if notif.email_status == "sent":
+            logger.info(f"Notification #{notification_id} email already sent at {notif.email_sent_at}. Skipping.")
+            return {"status": "already_sent", "notification_id": notification_id}
+
+        user = db.query(User).filter(User.id == notif.user_id).first()
+        if not user or not user.email:
+            notif.email_status = "failed"
+            notif.email_error = "User or email address not found."
+            db.commit()
+            return {"status": "failed", "error": "User or email not found"}
+
+        # Check user notification preferences
+        settings_obj = db.query(UserSettings).filter(UserSettings.user_id == user.id).first()
+        if settings_obj and not settings_obj.is_channel_enabled(notif.type, "email"):
+            notif.email_status = "skipped"
+            db.commit()
+            logger.info(f"Email skipped for notification #{notification_id} due to user preferences.")
+            return {"status": "skipped", "reason": "preferences_disabled"}
+
+        # Build email templates based on type
+        meta = notif.meta_data or {}
+        ntype = notif.type
+        user_name = user.full_name or user.email.split("@")[0]
+
+        if ntype == "post_published":
+            subject, html_body, text_body = EmailTemplates.post_published(
+                user_name=user_name,
+                platform=meta.get("platform", ""),
+                preview=meta.get("preview"),
+                published_url=meta.get("published_url"),
+            )
+        elif ntype == "post_failed":
+            subject, html_body, text_body = EmailTemplates.post_failed(
+                user_name=user_name,
+                platform=meta.get("platform", ""),
+                preview=meta.get("preview"),
+                error_message=meta.get("error") or notif.message,
+            )
+        elif ntype == "post_scheduled":
+            subject, html_body, text_body = EmailTemplates.post_scheduled(
+                user_name=user_name,
+                platform=meta.get("platform", ""),
+                preview=meta.get("preview"),
+                scheduled_at_str=meta.get("scheduled_at"),
+            )
+        elif ntype == "scheduled_reminder":
+            subject, html_body, text_body = EmailTemplates.scheduled_reminder(
+                user_name=user_name,
+                platform=meta.get("platform", ""),
+                preview=meta.get("preview"),
+                scheduled_at_str=meta.get("scheduled_at"),
+            )
+        elif ntype in ("campaign_created", "campaign_updated", "campaign_completed"):
+            event_suffix = ntype.replace("campaign_", "")
+            subject, html_body, text_body = EmailTemplates.campaign_event(
+                user_name=user_name,
+                campaign_name=meta.get("campaign_name", "Campaign"),
+                event=event_suffix,
+            )
+        elif ntype == "account_issue":
+            subject, html_body, text_body = EmailTemplates.account_issue(
+                user_name=user_name,
+                platform=meta.get("platform", ""),
+                issue_description=meta.get("issue") or notif.message,
+            )
+        elif ntype == "system_alert":
+            subject, html_body, text_body = EmailTemplates.system_alert(
+                user_name=user_name,
+                title=notif.title,
+                message=notif.message,
+            )
+        else:
+            subject, html_body, text_body = EmailTemplates.system_alert(
+                user_name=user_name,
+                title=notif.title,
+                message=notif.message,
+            )
+
+        # Attempt real SMTP delivery
+        success, error_msg = EmailService.send_email(
+            to_email=user.email,
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+        )
+
+        now = datetime.now(timezone.utc)
+        if success:
+            notif.email_status = "sent"
+            notif.email_sent_at = now
+            notif.email_error = None
+            db.commit()
+            return {"status": "sent", "recipient": user.email, "notification_id": notification_id}
+        else:
+            notif.email_status = "failed"
+            notif.email_error = error_msg
+            db.commit()
+
+            # Retry on transient connection issues if Celery retry is active
+            if self and hasattr(self, "retry"):
+                err_lower = (error_msg or "").lower()
+                is_transient = any(k in err_lower for k in ("timeout", "connection", "temporary", "network", "busy"))
+                if is_transient and self.request.retries < self.max_retries:
+                    logger.warning(f"Retrying send_notification_email_task #{notification_id} in {self.default_retry_delay}s")
+                    raise self.retry(exc=Exception(error_msg))
+
+            return {"status": "failed", "error": error_msg, "notification_id": notification_id}
+
+    except Exception as exc:
+        logger.error(f"Error executing send_notification_email_task for #{notification_id}: {exc}", exc_info=True)
+        try:
+            notif = db.query(Notification).filter(Notification.id == notification_id).first()
+            if notif:
+                notif.email_status = "failed"
+                notif.email_error = str(exc)[:500]
+                db.commit()
+        except Exception:
+            pass
+        return {"status": "failed", "error": str(exc)}
+    finally:
+        db.close()
+
+
+@celery_app.task(name="app.worker.tasks.check_and_send_scheduled_reminders")
+def check_and_send_scheduled_reminders():
+    """
+    Periodic Celery Beat task that scans for scheduled posts publishing in the next 30 minutes.
+    Dispatches a single reminder notification with an idempotent event key.
+    """
+    from datetime import timedelta
+    now_utc = datetime.now(timezone.utc)
+    reminder_window_start = now_utc
+    reminder_window_end = now_utc + timedelta(minutes=35)
+
+    db: Session = SessionLocal()
+    try:
+        from app.services.notification_service import notify_scheduled_reminder
+        posts = (
+            db.query(Post)
+            .filter(
+                Post.status == PostStatus.scheduled.value,
+                Post.scheduled_at.isnot(None),
+                Post.scheduled_at >= reminder_window_start,
+                Post.scheduled_at <= reminder_window_end,
+            )
+            .all()
+        )
+
+        dispatched = []
+        for p in posts:
+            notif = notify_scheduled_reminder(db, p)
+            if notif:
+                dispatched.append(p.id)
+
+        return {"reminders_checked": len(posts), "dispatched_count": len(dispatched), "post_ids": dispatched}
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# Analytics Module: Real Social Media Metrics Synchronization Task
+# ---------------------------------------------------------------------------
+
+@celery_app.task(name="app.worker.tasks.sync_social_analytics_task")
+def sync_social_analytics_task():
+    """
+    Periodic Celery Beat task that synchronizes real social metrics for published
+    posts across all active users. Queries platform APIs (LinkedIn, Facebook,
+    Instagram, YouTube, X, Pinterest) and updates PostMetric records.
+    """
+    import asyncio
+    from app.models.user import User
+    from app.services.social_analytics_service import SocialAnalyticsService
+
+    db: Session = SessionLocal()
+    try:
+        users = db.query(User).filter(User.is_active == True).all()
+        logger.info(f"sync_social_analytics_task: Starting sync for {len(users)} active users.")
+
+        total_posts_synced = 0
+        total_metrics_updated = 0
+        user_results = []
+
+        for user in users:
+            try:
+                res = asyncio.run(SocialAnalyticsService.sync_user_analytics(db, user.id, days=30))
+                total_posts_synced += res.get("synced_posts_count", 0)
+                total_metrics_updated += res.get("metrics_updated_count", 0)
+                user_results.append({"user_id": user.id, "metrics_updated": res.get("metrics_updated_count", 0)})
+            except Exception as u_exc:
+                logger.warning(f"Error syncing analytics for user #{user.id}: {u_exc}")
+
+        return {
+            "status": "completed",
+            "users_processed": len(users),
+            "total_posts_synced": total_posts_synced,
+            "total_metrics_updated": total_metrics_updated,
+        }
+    finally:
+        db.close()
+
+

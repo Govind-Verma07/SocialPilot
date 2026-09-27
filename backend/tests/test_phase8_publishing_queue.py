@@ -170,16 +170,19 @@ def test_4_scheduled_and_recurring_queueing(client, db_session):
     db_session.add(PostSocialAccount(post_id=post.id, social_account_id=acc_li.id))
     db_session.commit()
 
-    with patch("app.worker.tasks.SessionLocal", return_value=db_session), \
+    post_id = post.id
+    from tests.conftest import TestingSessionLocal
+
+    with patch("app.worker.tasks.SessionLocal", side_effect=TestingSessionLocal), \
          patch("app.worker.tasks.process_publishing_job.delay") as mock_job_delay, \
          patch("app.worker.tasks.publish_single_post_task.delay"):
         result = check_and_publish_due_posts()
 
     assert result["dispatched_count"] >= 1
-    assert post.id in result["post_ids"]
+    assert post_id in result["post_ids"]
     mock_job_delay.assert_called_once()
 
-    post_jobs = db_session.query(PublishingJob).filter(PublishingJob.post_id == post.id).all()
+    post_jobs = db_session.query(PublishingJob).filter(PublishingJob.post_id == post_id).all()
     assert len(post_jobs) == 1
     assert post_jobs[0].status == PublishingJobStatus.queued.value
 

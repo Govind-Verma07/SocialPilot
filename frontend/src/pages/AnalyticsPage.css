@@ -1,89 +1,680 @@
-/* AnalyticsPage.css — Styling for Analytics Dashboard & Reports Export Module */
+/* AnalyticsPage.css — Milestone 3 Rich Glassmorphism Analytics Design */
 
-.analytics-container {
+.analytics-page-container {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
 }
 
+/* Top Control Bar */
 .analytics-top-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px 18px;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  backdrop-filter: blur(12px);
 }
 
-.export-actions {
+.analytics-tab-buttons {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
+.analytics-tab-btn {
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #94a3b8;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.analytics-tab-btn:hover {
+  color: #f1f5f9;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.analytics-tab-btn.active {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: #6366f1;
+  color: #818cf8;
+  font-weight: 600;
+}
+
+.analytics-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.analytics-filter-select {
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: #f1f5f9;
+  font-size: 12.5px;
+  outline: none;
+  cursor: pointer;
+}
+
+.range-pills {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(30, 41, 59, 0.4);
+  padding: 3px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.range-pill {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 11.5px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.range-pill:hover {
+  color: #f1f5f9;
+}
+
+.range-pill.active {
+  background: rgba(255, 255, 255, 0.12);
+  color: #f1f5f9;
+  font-weight: 600;
+}
+
+.export-btn-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Stat Cards */
 .analytics-stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 16px;
 }
 
-.analytics-card {
-  padding: 24px;
+.analytics-stat-card {
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.analytics-grid-two {
+.stat-card-label {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.stat-card-value {
+  font-size: 26px;
+  font-weight: 800;
+  color: #f1f5f9;
+  letter-spacing: -0.02em;
+}
+
+.stat-card-sub {
+  font-size: 11.5px;
+  color: #64748b;
+}
+
+/* Chart Card */
+.analytics-chart-card {
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.chart-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.chart-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin: 0 0 4px 0;
+}
+
+.chart-subtitle {
+  font-size: 12px;
+  color: #94a3b8;
+  margin: 0;
+}
+
+.chart-legend {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 11.5px;
+  color: #cbd5e1;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.legend-dot.blue { background: #3b82f6; }
+.legend-dot.purple { background: #a855f7; }
+.legend-dot.green { background: #10b981; }
+
+.svg-trend-chart-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  padding: 10px 0;
+}
+
+.trend-svg {
+  width: 100%;
+  height: 220px;
+}
+
+.chart-bar-group rect {
+  transition: all 0.3s ease;
+}
+
+.chart-bar-group:hover rect {
+  opacity: 1;
+  filter: brightness(1.2);
+}
+
+.no-chart-data {
+  padding: 40px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+/* Two Column Grid */
+.analytics-two-col-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1.3fr;
   gap: 20px;
 }
 
-@media (max-width: 900px) {
-  .analytics-grid-two {
+@media (max-width: 1024px) {
+  .analytics-two-col-grid {
     grid-template-columns: 1fr;
   }
 }
 
-.bar-chart-simulated {
-  display: flex;
-  align-items: flex-end;
-  gap: 16px;
-  height: 180px;
-  padding-top: 20px;
-}
-
-.bar-col {
-  flex: 1;
+.platform-breakdown-card,
+.top-posts-card,
+.audience-accounts-card,
+.campaigns-roi-card,
+.comparison-matrix-card {
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  height: 100%;
-  justify-content: flex-end;
+  gap: 14px;
 }
 
-.bar-fill {
-  width: 100%;
-  border-radius: 6px 6px 0 0;
-  background: var(--grad-accent);
-  box-shadow: 0 0 12px rgba(124, 58, 237, 0.4);
-  transition: height 0.5s ease;
+.section-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin: 0 0 2px 0;
 }
 
-.bar-lbl {
-  font-size: 11px;
-  color: var(--clr-text-muted);
+.section-desc {
+  font-size: 12px;
+  color: #94a3b8;
+  margin: 0 0 10px 0;
 }
 
-.geo-list {
+.empty-sub-box {
+  padding: 24px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 12.5px;
+  background: rgba(30, 41, 59, 0.3);
+  border-radius: 8px;
+}
+
+/* Platform Metrics List */
+.platform-metrics-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
-.geo-item {
+.platform-metric-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 13px;
-  padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 8px;
+  padding: 12px 14px;
+  background: rgba(30, 41, 59, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  gap: 12px;
 }
+
+.plat-icon-col {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.p-icon {
+  font-size: 20px;
+}
+
+.p-name-block {
+  display: flex;
+  flex-direction: column;
+}
+
+.p-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.p-count {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.plat-stats-col {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.p-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.p-num {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.p-lbl {
+  font-size: 10px;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+/* Tables */
+.top-posts-table-wrapper,
+.audience-table-wrapper,
+.campaign-roi-table-wrapper,
+.matrix-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.analytics-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  text-align: left;
+}
+
+.analytics-table th {
+  padding: 10px 12px;
+  background: rgba(30, 41, 59, 0.6);
+  color: #94a3b8;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.analytics-table td {
+  padding: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  color: #f1f5f9;
+}
+
+.analytics-table tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.analytics-table tr.row-selected {
+  background: rgba(99, 102, 241, 0.12);
+}
+
+.post-content-cell {
+  max-width: 260px;
+}
+
+.post-content-cell .cell-text {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #f1f5f9;
+}
+
+.post-camp-tag {
+  display: inline-block;
+  font-size: 10px;
+  color: #a5b4fc;
+  background: rgba(99, 102, 241, 0.15);
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-top: 3px;
+}
+
+.platform-tag {
+  font-size: 11px;
+  color: #cbd5e1;
+  text-transform: capitalize;
+}
+
+.account-plat-pill {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.source-badge {
+  font-size: 11px;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.12);
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.camp-table-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.camp-plat {
+  font-size: 10.5px;
+  color: #94a3b8;
+}
+
+.roi-pill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.roi-pill.positive {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+
+.roi-pill.negative {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.roi-pill.unmeasured {
+  background: rgba(255, 255, 255, 0.05);
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+/* Notice Box */
+.analytics-notice-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 18px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: 10px;
+  color: #93c5fd;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.notice-icon {
+  font-size: 18px;
+}
+
+.notice-bullets {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #bfdbfe;
+  opacity: 0.9;
+}
+
+/* Comparison Matrix Section */
+.card-header-with-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.comparison-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.comparison-header h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #f1f5f9;
+}
+
+.clear-comp-btn {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.clear-comp-btn:hover {
+  color: #f1f5f9;
+}
+
+.winners-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.winner-pill {
+  padding: 8px 14px;
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: #c7d2fe;
+}
+
+.winner-pill.roi {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: #a7f3d0;
+}
+
+.matrix-table th {
+  background: rgba(15, 23, 42, 0.8);
+}
+
+.matrix-table td:first-child {
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.analytics-loading-box {
+  padding: 60px 20px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: #94a3b8;
+}
+
+/* Diagnostics Panel */
+.diagnostics-panel-card {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.diagnostics-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.diagnostics-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.diagnostics-desc {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.diagnostics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.diagnostic-item-box {
+  padding: 14px;
+  background: rgba(30, 41, 59, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.diagnostic-item-box.connected {
+  border-color: rgba(16, 185, 129, 0.25);
+  background: rgba(16, 185, 129, 0.03);
+}
+
+.diagnostic-item-box.disconnected {
+  border-color: rgba(239, 68, 68, 0.25);
+  background: rgba(239, 68, 68, 0.03);
+}
+
+.diagnostic-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.diagnostic-plat-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #f1f5f9;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.diagnostic-status-pill {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.diagnostic-status-pill.ready {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.diagnostic-status-pill.warn {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.diagnostic-meta-row {
+  font-size: 11.5px;
+  color: #64748b;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.diagnostic-msg {
+  font-size: 11.5px;
+  color: #94a3b8;
+  line-height: 1.4;
+}
+
+/* Sync Button Animation */
+.btn-sync-spin {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.unavailable-badge {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(100, 116, 139, 0.2);
+  color: #94a3b8;
+  border: 1px solid rgba(100, 116, 139, 0.3);
+}
+

@@ -27,6 +27,7 @@ from app.models.post_publish_result import PostPublishResult
 from app.models.recurring_rule import RecurringRule, RecurringRuleSocialAccount
 from app.models.publishing_job import PublishingJob
 from app.models.publishing_log import PublishingLog
+from app.models.notification import Notification
 
 __all__ = [
     "UserRole",
@@ -52,6 +53,7 @@ __all__ = [
     "RecurringRuleSocialAccount",
     "PublishingJob",
     "PublishingLog",
+    "Notification",
 ]
 
 

@@ -8,7 +8,7 @@
  */
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams, useLocation } from 'react-router-dom'
 import { UploadCloud, Eye, Trash2 } from 'lucide-react'
 import AppShell from '../components/AppShell'
 import GlowCard from '../components/ui/GlowCard'
@@ -17,9 +17,19 @@ import StatusBadge from '../components/ui/StatusBadge'
 import EmptyState from '../components/ui/EmptyState'
 import postsApi from '../api/postsApi'
 import socialApi from '../api/socialApi'
+import campaignsApi from '../api/campaignsApi'
 import { resolveMediaUrl } from '../utils/mediaUtils'
 import { getBackendBaseURL } from '../api/authApi'
+import CalendarDateModal from '../components/CalendarDateModal'
 import './PostsPage.css'
+
+const CALENDAR_POST_THRESHOLD = 3
+
+const getCalendarPostLimit = (view) => {
+  if (view === 'day') return 12
+  if (view === 'week') return 4
+  return CALENDAR_POST_THRESHOLD // default 3 for month view
+}
 
 const PLATFORM_META = {
   facebook:  { label: 'Facebook', icon: '📘' },
@@ -43,6 +53,7 @@ const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 export default function PostsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const location = useLocation()
   const initialTab = searchParams.get('tab') || 'queue'
   const [activeTab, setActiveTab] = useState(
     initialTab === 'create' ? 'queue' : initialTab
@@ -68,10 +79,26 @@ export default function PostsPage() {
     } else if (tabParam === 'recurring') {
       setActiveTab('recurring')
       setShowComposer(false)
-    } else if (tabParam === 'queue') {
+    } else if (tabParam === 'queue' || !tabParam) {
       setActiveTab('queue')
     }
   }, [searchParams])
+
+  // Smooth scroll and focus Post Queue if arriving directly at /posts or with hash #post-queue-section
+  useEffect(() => {
+    const tabParam = searchParams.get('tab')
+    if (location.pathname === '/posts' && (!tabParam || tabParam === 'queue') && !showComposer) {
+      const timer = setTimeout(() => {
+        const queueEl = document.getElementById('post-queue-section')
+        if (queueEl) {
+          queueEl.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          queueEl.classList.add('destination-highlight')
+          setTimeout(() => queueEl.classList.remove('destination-highlight'), 2000)
+        }
+      }, 150)
+      return () => clearTimeout(timer)
+    }
+  }, [location.pathname, location.hash, searchParams, showComposer])
 
   const [highlightedPostId, setHighlightedPostId] = useState(null)
 
@@ -122,12 +149,15 @@ export default function PostsPage() {
   // Calendar view controls
   const [currentDate, setCurrentDate] = useState(new Date())
   const [calendarView, setCalendarView] = useState('month') // 'month', 'week', 'day'
+  const [selectedDatePostsModal, setSelectedDatePostsModal] = useState(null)
 
   // Form State
   const [scheduleType, setScheduleType] = useState('one-time') // 'one-time', 'recurring'
   const [content, setContent] = useState('')
   const [selectedAccountIds, setSelectedAccountIds] = useState([])
   const [contentType, setContentType] = useState('text')
+  const [availableCampaigns, setAvailableCampaigns] = useState([])
+  const [selectedCampaignId, setSelectedCampaignId] = useState('')
   const [scheduleDate, setScheduleDate] = useState('')
   const [scheduleTime, setScheduleTime] = useState('')
   const [recurrenceFrequency, setRecurrenceFrequency] = useState('weekly')
@@ -377,12 +407,22 @@ export default function PostsPage() {
     }, 3000)
   }, [scheduledPosts, setSearchParams])
 
+  const loadAvailableCampaigns = async () => {
+    try {
+      const res = await campaignsApi.getCampaigns({ page_size: 100 })
+      setAvailableCampaigns(res.data?.items || [])
+    } catch (err) {
+      console.error('Failed to load campaigns for composer:', err)
+    }
+  }
+
   useEffect(() => {
     loadAccounts()
     loadQueuePosts()
     loadDraftPosts()
     loadRecurringRules()
     loadCalendarPosts()
+    loadAvailableCampaigns()
   }, [])
 
   useEffect(() => {
@@ -552,6 +592,20 @@ export default function PostsPage() {
     }
   }
 
+  const togglePlatformAccounts = (platformKey) => {
+    const platformActiveAccounts = connectedAccounts.filter(
+      (a) => a.status === 'connected' && a.platform?.toLowerCase() === platformKey.toLowerCase()
+    )
+    const platformActiveIds = platformActiveAccounts.map((a) => a.id)
+    const allSelected = platformActiveIds.length > 0 && platformActiveIds.every((id) => selectedAccountIds.includes(id))
+
+    if (allSelected) {
+      setSelectedAccountIds((prev) => prev.filter((id) => !platformActiveIds.includes(id)))
+    } else {
+      setSelectedAccountIds((prev) => Array.from(new Set([...prev, ...platformActiveIds])))
+    }
+  }
+
   // Open Composer in Draft Edit Mode
   const handleEditDraft = async (draft) => {
     setEditingDraftId(draft.id)
@@ -599,6 +653,7 @@ export default function PostsPage() {
     }
     setErrorMessage('')
     setSuccessMessage('')
+    setSelectedCampaignId(draft.campaign_id || '')
     setShowComposer(true)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -612,6 +667,7 @@ export default function PostsPage() {
     })
     setShowComposer(false)
     setEditingDraftId(null)
+    setSelectedCampaignId('')
     setScheduleType('one-time')
     setContent('')
     setScheduleDate('')
@@ -640,6 +696,7 @@ export default function PostsPage() {
         social_account_ids: selectedAccountIds,
         post_type: contentType,
         status: 'draft',
+        campaign_id: selectedCampaignId || null,
         media_urls: mediaUrls,
         media_ids: mediaIds,
         media_items: mediaItems,
@@ -740,6 +797,7 @@ export default function PostsPage() {
         const payload = {
           content: trimmedContent,
           social_account_ids: selectedAccountIds,
+          campaign_id: selectedCampaignId || null,
           frequency: recurrenceFrequency,
           interval: 1,
           start_at: scheduledDateTime.toISOString(),
@@ -779,6 +837,7 @@ export default function PostsPage() {
       const payload = {
         content: trimmedContent,
         social_account_ids: selectedAccountIds,
+        campaign_id: selectedCampaignId || null,
         scheduled_at: scheduledDateTime.toISOString(),
         post_type: contentType,
         status: 'scheduled',
@@ -1355,33 +1414,82 @@ export default function PostsPage() {
                     </Link>
                   </div>
                 ) : (
-                  <div className="platform-checkboxes">
-                    {connectedAccounts.map((acc) => {
-                      const isChecked = selectedAccountIds.includes(acc.id)
-                      const isConnected = acc.status === 'connected'
-                      const meta = PLATFORM_META[acc.platform.toLowerCase()] || { label: acc.platform, icon: '📱' }
+                  <div className="composer-accounts-dynamic-container">
+                    {/* Platform Quick-Filter / Batch Toggle Pills */}
+                    <div className="composer-platform-quick-pills">
+                      {Object.entries(
+                        connectedAccounts.reduce((acc, account) => {
+                          const plat = account.platform?.toLowerCase() || 'other'
+                          if (!acc[plat]) acc[plat] = []
+                          acc[plat].push(account)
+                          return acc
+                        }, {})
+                      ).map(([platformKey, platformAccounts]) => {
+                        const meta = PLATFORM_META[platformKey] || { label: platformKey, icon: '📱' }
+                        const activeAccounts = platformAccounts.filter((a) => a.status === 'connected')
+                        const selectedPlatformCount = platformAccounts.filter((a) => selectedAccountIds.includes(a.id)).length
+                        const isAllSelected = activeAccounts.length > 0 && selectedPlatformCount === activeAccounts.length
+                        const isPartial = selectedPlatformCount > 0 && !isAllSelected
 
-                      return (
-                        <button
-                          key={acc.id}
-                          type="button"
-                          disabled={!isConnected}
-                          className={`platform-check-btn ${isChecked ? 'checked' : ''}`}
-                          onClick={() => toggleAccount(acc.id)}
-                          style={{
-                            opacity: isConnected ? 1 : 0.5,
-                            cursor: isConnected ? 'pointer' : 'not-allowed',
-                          }}
-                          title={!isConnected ? 'Account is not connected or token expired' : acc.account_name}
-                        >
-                          <span>{meta.icon}</span>
-                          <span>
-                            <strong>{meta.label}</strong> ({acc.account_name || acc.account_username || 'Account'})
-                          </span>
-                          <span>{isChecked ? '✓' : '+'}</span>
-                        </button>
-                      )
-                    })}
+                        return (
+                          <button
+                            key={platformKey}
+                            type="button"
+                            className={`composer-quick-pill ${isAllSelected ? 'all-selected' : isPartial ? 'partial-selected' : ''}`}
+                            onClick={() => togglePlatformAccounts(platformKey)}
+                            title={`Toggle all ${meta.label} accounts (${selectedPlatformCount}/${platformAccounts.length} selected)`}
+                          >
+                            <span className="quick-pill-icon">{meta.icon}</span>
+                            <span className="quick-pill-label">{meta.label}</span>
+                            <span className="quick-pill-count">
+                              {selectedPlatformCount}/{platformAccounts.length}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+
+                    {/* Dynamic Auto-Fitting Accounts Grid */}
+                    <div className="composer-accounts-dynamic-grid">
+                      {connectedAccounts.map((acc) => {
+                        const isChecked = selectedAccountIds.includes(acc.id)
+                        const isConnected = acc.status === 'connected'
+                        const meta = PLATFORM_META[acc.platform.toLowerCase()] || { label: acc.platform, icon: '📱' }
+
+                        return (
+                          <button
+                            key={acc.id}
+                            type="button"
+                            disabled={!isConnected}
+                            className={`composer-account-card platform-check-btn ${isChecked ? 'checked' : ''}`}
+                            onClick={() => toggleAccount(acc.id)}
+                            title={!isConnected ? 'Account disconnected or expired' : `${meta.label}: ${acc.account_name}`}
+                          >
+                            <div className="composer-card-avatar-wrap">
+                              {acc.profile_picture_url ? (
+                                <img src={acc.profile_picture_url} alt={acc.account_name} className="composer-card-avatar" />
+                              ) : (
+                                <div className="composer-card-avatar-fallback">
+                                  {(acc.account_name || meta.label).charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                              <span className="composer-card-platform-mini">{meta.icon}</span>
+                            </div>
+
+                            <div className="composer-card-details">
+                              <span className="composer-card-name">{acc.account_name || meta.label}</span>
+                              <span className="composer-card-sub">
+                                {acc.account_username ? `@${acc.account_username}` : meta.label}
+                              </span>
+                            </div>
+
+                            <div className={`composer-card-checkbox ${isChecked ? 'checked' : ''}`}>
+                              {isChecked ? '✓' : ''}
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
@@ -1667,6 +1775,41 @@ export default function PostsPage() {
                 </div>
               )}
 
+              {/* Marketing Campaign Selector (Optional) */}
+              <div className="form-group" style={{ marginBottom: '4px' }}>
+                <label className="form-label" style={{ marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span>🎯 Associate with Marketing Campaign (Optional)</span>
+                </label>
+                <select
+                  value={selectedCampaignId}
+                  onChange={(e) => setSelectedCampaignId(e.target.value)}
+                  className="form-input"
+                  style={{
+                    background: 'rgba(30, 41, 59, 0.8)',
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    borderRadius: '8px',
+                    padding: '10px 12px',
+                    color: '#f8fafc',
+                    fontSize: '13px',
+                    outline: 'none',
+                    cursor: 'pointer',
+                    width: '100%',
+                  }}
+                >
+                  <option value="">-- No Campaign (Standalone Post) --</option>
+                  {availableCampaigns.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      🎯 {c.name} ({c.platform || 'Multi'}) — {c.status}
+                    </option>
+                  ))}
+                </select>
+                {selectedCampaignId && (
+                  <div style={{ fontSize: '11.5px', color: '#a5b4fc', marginTop: '4px' }}>
+                    ✨ This post will automatically track towards the campaign's progress, engagements, and ROI analytics.
+                  </div>
+                )}
+              </div>
+
               {/* Schedule Type Selection (One-Time vs Recurring) */}
               {!editingDraftId && (
                 <div className="form-group">
@@ -1835,7 +1978,7 @@ export default function PostsPage() {
 
         {/* TAB 1: SCHEDULED & PUBLISHED QUEUE */}
         {activeTab === 'queue' && (
-          <div className="scheduled-queue-container" style={{ marginTop: '20px' }}>
+          <div id="post-queue-section" className="scheduled-queue-container" style={{ marginTop: '20px' }}>
             {/* Filter Tabs for Queue */}
             <div className="queue-filter-tabs">
               {[
@@ -2080,6 +2223,10 @@ export default function PostsPage() {
                 const isOutsideMonth =
                   calendarView === 'month' && dayDate.getMonth() !== currentDate.getMonth()
 
+                const visibleLimit = getCalendarPostLimit(calendarView)
+                const visiblePosts = dayPosts.slice(0, visibleLimit)
+                const hiddenCount = dayPosts.length - visibleLimit
+
                 return (
                   <div
                     key={dayKey}
@@ -2089,15 +2236,24 @@ export default function PostsPage() {
                     <div className="calendar-day-top">
                       <span className="calendar-day-num">{dayDate.getDate()}</span>
                       {dayPosts.length > 0 && (
-                        <span style={{ fontSize: '10px', color: '#a855f7', fontWeight: 700 }}>
+                        <button
+                          type="button"
+                          className="calendar-day-count-badge"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSelectedDatePostsModal({ date: dayDate, posts: dayPosts })
+                          }}
+                          title={`View all ${dayPosts.length} posts for ${dayDate.toLocaleDateString()}`}
+                          aria-label={`View ${dayPosts.length} posts for ${dayDate.toLocaleDateString()}`}
+                        >
                           {dayPosts.length} {dayPosts.length === 1 ? 'post' : 'posts'}
-                        </span>
+                        </button>
                       )}
                     </div>
 
                     {/* Render Events */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
-                      {dayPosts.map((post) => {
+                      {visiblePosts.map((post) => {
                         const postDate = post.scheduled_at || post.published_at
                         const postTime = postDate
                           ? new Date(postDate).toLocaleTimeString(undefined, {
@@ -2129,6 +2285,22 @@ export default function PostsPage() {
                           </div>
                         )
                       })}
+
+                      {/* Compact "+N more" indicator for high-post dates */}
+                      {hiddenCount > 0 && (
+                        <button
+                          type="button"
+                          className="calendar-more-posts-btn"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSelectedDatePostsModal({ date: dayDate, posts: dayPosts })
+                          }}
+                          title={`Click to view all ${dayPosts.length} posts on ${dayDate.toLocaleDateString()}`}
+                          aria-label={`View ${hiddenCount} more posts`}
+                        >
+                          +{hiddenCount} more
+                        </button>
+                      )}
                     </div>
                   </div>
                 )
@@ -2504,6 +2676,30 @@ export default function PostsPage() {
             )}
           </div>
         )}
+
+        {/* Calendar Date Posts Modal */}
+        <CalendarDateModal
+          isOpen={Boolean(selectedDatePostsModal)}
+          onClose={() => setSelectedDatePostsModal(null)}
+          date={selectedDatePostsModal?.date}
+          posts={selectedDatePostsModal?.posts || []}
+          platformMeta={PLATFORM_META}
+          onSelectPost={(post) => setSelectedPost(post)}
+          onViewInQueue={(postId) => scrollToQueuePost(postId)}
+          onPublishNow={(post) => handlePublishNow(post)}
+          publishingPostId={publishingPostId}
+          onQuickSchedule={(date) => {
+            setEditingDraftId(null)
+            setContent('')
+            const yr = date.getFullYear()
+            const mo = String(date.getMonth() + 1).padStart(2, '0')
+            const da = String(date.getDate()).padStart(2, '0')
+            setScheduleDate(`${yr}-${mo}-${da}`)
+            setScheduleTime('12:00')
+            setShowComposer(true)
+            window.scrollTo({ top: 0, behavior: 'smooth' })
+          }}
+        />
 
         {/* Post Details Modal */}
 

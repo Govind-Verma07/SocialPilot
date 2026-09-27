@@ -24,6 +24,7 @@ class PostCreate(BaseModel):
     """Payload for creating a post (either scheduled or draft)."""
     content: Optional[str] = Field("", description="Post text/caption")
     social_account_ids: Optional[List[str]] = Field(default_factory=list, description="Target social accounts")
+    campaign_id: Optional[str] = Field(None, description="Optional associated campaign ID")
     scheduled_at: Optional[datetime] = Field(None, description="Future timestamp when the post should be published")
     status: Optional[str] = Field("scheduled", description="draft or scheduled")
     post_type: Optional[str] = Field("text", description="Format: text, image, video, carousel, story, reel")
@@ -70,6 +71,7 @@ class PostUpdate(BaseModel):
     """Payload for updating an existing post or draft."""
     content: Optional[str] = None
     social_account_ids: Optional[List[str]] = None
+    campaign_id: Optional[str] = None
     scheduled_at: Optional[datetime] = None
     status: Optional[str] = None
     post_type: Optional[str] = None
@@ -145,6 +147,7 @@ class PostResponse(BaseModel):
     id: str
     user_id: str
     team_id: Optional[str] = None
+    campaign_id: Optional[str] = None
     content: str
     media_urls: Optional[List[str]] = []
     media_ids: Optional[List[str]] = []

@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 # pyrefly: ignore [missing-import]
 from sqlalchemy import (
     String, Boolean, DateTime, Text,
-    ForeignKey, Enum as SAEnum,
+    ForeignKey, Enum as SAEnum, UniqueConstraint,
 )
 # pyrefly: ignore [missing-import]
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -24,6 +24,13 @@ from app.models.enums import AccountStatus, SocialPlatform, SyncStatus
 
 class SocialAccount(Base):
     __tablename__ = "social_accounts"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "platform", "platform_account_id",
+            name="uq_social_accounts_user_platform_account",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True,

@@ -65,6 +65,12 @@ class Post(Base):
         nullable=True,
         index=True,
     )
+    campaign_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("campaigns.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     published_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
@@ -106,6 +112,13 @@ class Post(Base):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
+    metrics = relationship(
+        "PostMetric",
+        back_populates="post",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+    campaign = relationship("Campaign", back_populates="posts")
     user = relationship("User", foreign_keys=[user_id])
     recurring_rule = relationship("RecurringRule", back_populates="posts")
 

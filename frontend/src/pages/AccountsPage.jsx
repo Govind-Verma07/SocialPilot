@@ -16,6 +16,7 @@ import GlowCard from '../components/ui/GlowCard'
 import Button from '../components/ui/Button'
 import Modal from '../components/Modal'
 import { socialApi } from '../api/socialApi'
+import { Plus, RefreshCw, Unlink } from 'lucide-react'
 import './AccountsPage.css'
 
 const SIX_PLATFORMS = [
@@ -199,38 +200,182 @@ export default function AccountsPage() {
                 </div>
               </div>
 
-              <div className="platforms-grid">
+              <div className="platforms-dynamic-grid">
                 {SIX_PLATFORMS.map((platform) => {
                   const platformAccounts = accounts.filter(
                     (a) => a.platform?.toLowerCase() === platform.platform.toLowerCase()
                   )
+                  const count = platformAccounts.length
+                  const isConnected = count > 0
+                  const isConnecting = connectingPlatform === platform.platform
 
-                  // If not connected, render Disconnected platform card with "Connect Account" button
-                  if (platformAccounts.length === 0) {
-                    return (
-                      <SocialAccountCard
-                        key={platform.platform}
-                        platform={platform}
-                        isAvailable={true}
-                        onConnect={() => handleConnect(platform)}
-                        connectLoading={connectingPlatform === platform.platform}
-                      />
-                    )
-                  }
+                  return (
+                    <div
+                      key={platform.platform}
+                      className={`platform-panel ${isConnected ? 'has-accounts' : 'no-accounts'}`}
+                      id={`platform-group-${platform.platform}`}
+                      style={{ '--platform-color': platform.color }}
+                    >
+                      {/* Panel Header */}
+                      <div className="platform-panel-header">
+                        <div className="platform-panel-brand">
+                          <span
+                            className="platform-panel-icon"
+                            style={{
+                              background: `${platform.color}15`,
+                              borderColor: `${platform.color}35`,
+                            }}
+                          >
+                            {platform.icon}
+                          </span>
+                          <div>
+                            <h3 className="platform-panel-name">{platform.label}</h3>
+                            <span className={`platform-panel-badge ${isConnected ? 'connected' : 'empty'}`}>
+                              {isConnected ? `● ${count} ${count === 1 ? 'account' : 'accounts'}` : '○ Not connected'}
+                            </span>
+                          </div>
+                        </div>
 
-                  // If connected, render each connected account for this platform
-                  return platformAccounts.map((account) => (
-                    <SocialAccountCard
-                      key={account.id}
-                      platform={platform}
-                      account={account}
-                      isAvailable={false}
-                      onSync={handleSync}
-                      onDisconnect={handleOpenDisconnectModal}
-                      syncLoading={syncingId === account.id}
-                      disconnectLoading={disconnectingId === account.id}
-                    />
-                  ))
+                        <button
+                          type="button"
+                          id={`connect-${platform.platform}-btn`}
+                          className={`btn-panel-action ${isConnected ? 'btn-panel-add' : 'btn-panel-connect'}`}
+                          style={!isConnected ? { background: platform.color } : {}}
+                          onClick={() => handleConnect(platform)}
+                          disabled={isConnecting}
+                          title={isConnected ? `Connect another ${platform.label} account` : `Connect ${platform.label}`}
+                        >
+                          {isConnecting ? (
+                            <>
+                              <RefreshCw size={13} className="sp-spin" />
+                              <span>Connecting…</span>
+                            </>
+                          ) : (
+                            <>
+                              <Plus size={14} />
+                              <span>{isConnected ? '+ Add' : 'Connect'}</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+
+                      {/* Panel Content / Accounts */}
+                      <div className="platform-panel-content">
+                        {isConnected ? (
+                          <div className="platform-panel-accounts-list">
+                            {platformAccounts.map((account) => {
+                              const status = account.status || 'connected'
+                              const isOk = status === 'connected'
+                              const isSyncing = syncingId === account.id
+                              const isDisconnecting = disconnectingId === account.id
+                              const formattedDate = account.last_synced_at
+                                ? new Date(account.last_synced_at).toLocaleDateString(undefined, {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })
+                                : null
+
+                              return (
+                                <div
+                                  key={account.id}
+                                  className="platform-account-row"
+                                  id={`account-card-${account.id}`}
+                                >
+                                  <div className="account-row-info">
+                                    <div
+                                      className="account-row-avatar-wrap"
+                                      style={{ borderColor: `${platform.color}55` }}
+                                    >
+                                      {account.profile_picture_url ? (
+                                        <img
+                                          src={account.profile_picture_url}
+                                          alt={account.account_name}
+                                          className="account-row-avatar"
+                                        />
+                                      ) : (
+                                        <div
+                                          className="account-row-avatar-fallback"
+                                          style={{ background: platform.color }}
+                                        >
+                                          {(account.account_name || platform.label).charAt(0).toUpperCase()}
+                                        </div>
+                                      )}
+                                      <span className={`account-status-dot ${isOk ? 'ok' : 'err'}`} />
+                                    </div>
+
+                                    <div className="account-row-text">
+                                      <div className="account-row-name-row">
+                                        <span className="account-row-name" title={account.account_name}>
+                                          {account.account_name || platform.label}
+                                        </span>
+                                        <span className={`account-status-pill ${isOk ? 'ok' : 'err'}`}>
+                                          {isOk ? 'Connected' : status}
+                                        </span>
+                                      </div>
+                                      <span
+                                        className="account-row-handle"
+                                        title={account.account_username || account.platform_account_id}
+                                      >
+                                        {account.account_username
+                                          ? `@${account.account_username}`
+                                          : account.platform_account_id
+                                          ? `ID: ${account.platform_account_id}`
+                                          : platform.label}
+                                      </span>
+                                      {formattedDate && (
+                                        <span className="account-row-sync-time">
+                                          Synced: {formattedDate}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div className="account-row-actions">
+                                    <button
+                                      type="button"
+                                      className="btn-account-sync"
+                                      onClick={() => handleSync(account.id)}
+                                      disabled={isSyncing}
+                                      title="Sync account"
+                                    >
+                                      <RefreshCw size={13} className={isSyncing ? 'sp-spin' : ''} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      id={`disconnect-${platform.platform}-${account.id}-btn`}
+                                      data-account-id={account.id}
+                                      className="btn-account-disconnect social-card-disconnect"
+                                      onClick={() => handleOpenDisconnectModal(account)}
+                                      disabled={isDisconnecting}
+                                      title="Disconnect account"
+                                    >
+                                      <Unlink size={13} />
+                                    </button>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        ) : (
+                          <div className="platform-panel-empty">
+                            <p>No account connected yet. Link via OAuth to enable one-click publishing.</p>
+                            <button
+                              type="button"
+                              className="btn-panel-connect-cta"
+                              style={{ background: platform.color }}
+                              onClick={() => handleConnect(platform)}
+                              disabled={isConnecting}
+                            >
+                              <Plus size={13} />
+                              <span>Connect {platform.label}</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
                 })}
               </div>
             </GlowCard>
