@@ -312,3 +312,136 @@ def test_8_ownership_isolation(client, db_session):
     res_b_list = client.get("/api/v1/posts", headers=headers_b)
     assert res_b_list.status_code == 200
     assert res_b_list.json()["total"] == 0
+
+
+# ==============================================================================
+# TEST 9 — All 6 Platforms Scheduling & Notification Generation
+# ==============================================================================
+def test_9_all_6_platforms_scheduling_fast_and_notification(client, db_session):
+    """
+    Schedule a post with all 6 supported platforms:
+    LinkedIn, Facebook, Instagram, YouTube, X, Pinterest.
+    Verifies that:
+    1. Post creation succeeds immediately with HTTP 201.
+    2. The created post ID is returned in the response.
+    3. All 6 social accounts are associated with the post.
+    4. Notification for post_scheduled is created in the database.
+    5. No slow synchronous SMTP or blocking external API calls delay the response.
+    """
+    from app.models.notification import Notification
+    from unittest.mock import patch
+    from app.services.email_service import EmailService
+
+    user_id, _, headers = _register_and_login(client, "user_all6@example.com")
+    acc_li = _seed_account(db_session, user_id, SocialPlatform.linkedin, "LinkedIn 6")
+    acc_fb = _seed_account(db_session, user_id, SocialPlatform.facebook, "Facebook 6")
+    acc_ig = _seed_account(db_session, user_id, SocialPlatform.instagram, "Instagram 6")
+    acc_yt = _seed_account(db_session, user_id, SocialPlatform.youtube, "YouTube 6")
+    acc_x  = _seed_account(db_session, user_id, SocialPlatform.x, "X 6")
+    acc_pi = _seed_account(db_session, user_id, SocialPlatform.pinterest, "Pinterest 6")
+
+    all_acc_ids = [acc_li.id, acc_fb.id, acc_ig.id, acc_yt.id, acc_x.id, acc_pi.id]
+    future_time = (datetime.now(timezone.utc) + timedelta(days=2)).replace(microsecond=0)
+
+    payload = {
+        "content": "Exciting product announcement broadcasting across all 6 networks!",
+        "social_account_ids": all_acc_ids,
+        "scheduled_at": future_time.isoformat(),
+        "post_type": "text",
+    }
+
+    # Ensure EmailService.send_email is NOT called synchronously during the HTTP request
+    with patch.object(EmailService, "send_email") as mock_send_email:
+        res = client.post("/api/v1/posts", json=payload, headers=headers)
+        assert res.status_code == 201
+        mock_send_email.assert_not_called()
+
+    data = res.json()
+    assert "id" in data
+    assert data["id"] is not None
+    assert len(data["id"]) > 0
+    assert data["status"] == PostStatus.scheduled.value
+    assert len(data["social_accounts"]) == 6
+
+    returned_ids = {a["id"] for a in data["social_accounts"]}
+    assert returned_ids == set(all_acc_ids)
+
+    # Verify post_scheduled notification exists in DB
+    notif = (
+        db_session.query(Notification)
+        .filter(
+            Notification.user_id == user_id,
+            Notification.related_entity_id == data["id"],
+        )
+        .first()
+    )
+    assert notif is not None
+    assert notif.type == "post_scheduled"
+    assert "LinkedIn, Facebook, Instagram, Youtube, X, Pinterest" in notif.message or "Scheduled" in notif.title
+
+
+# ==============================================================================
+# TEST 10 — Single Platform Scheduling
+# ==============================================================================
+def test_10_single_platform_scheduling(client, db_session):
+    """
+    Schedule a post for a single platform (e.g. YouTube).
+    Verifies that the post ID is returned and attached account is accurate.
+    """
+    user_id, _, headers = _register_and_login(client, "user_single@example.com")
+    acc_yt = _seed_account(db_session, user_id, SocialPlatform.youtube, "My YouTube Channel")
+
+    future_time = (datetime.now(timezone.utc) + timedelta(days=1)).replace(microsecond=0)
+    payload = {
+        "content": "New video premiering soon!",
+        "social_account_ids": [acc_yt.id],
+        "scheduled_at": future_time.isoformat(),
+        "post_type": "text",
+    }
+
+    res = client.post("/api/v1/posts", json=payload, headers=headers)
+    assert res.status_code == 201
+    data = res.json()
+    assert data["id"] is not None
+    assert len(data["social_accounts"]) == 1
+    assert data["social_accounts"][0]["id"] == acc_yt.id
+    assert data["social_accounts"][0]["platform"] == "youtube"
+
+
+# ==============================================================================
+# TEST 11 — Duplicate Post Prevention on Client Timeout / Retry
+# ==============================================================================
+def test_11_duplicate_post_prevention_on_retry(client, db_session):
+    """
+    If a client retries post creation with identical payload within 2 minutes
+    (e.g., after a browser/client timeout occurred post-commit),
+    the endpoint returns the existing post record instead of creating a duplicate.
+    """
+    user_id, _, headers = _register_and_login(client, "user_retry@example.com")
+    acc = _seed_account(db_session, user_id, SocialPlatform.x, "X Account")
+
+    future_time = (datetime.now(timezone.utc) + timedelta(days=4)).replace(microsecond=0)
+    payload = {
+        "content": "Unique scheduled content for duplicate prevention test",
+        "social_account_ids": [acc.id],
+        "scheduled_at": future_time.isoformat(),
+        "post_type": "text",
+    }
+
+    # Initial request
+    res1 = client.post("/api/v1/posts", json=payload, headers=headers)
+    assert res1.status_code == 201
+    post1_id = res1.json()["id"]
+
+    # Retry request with identical payload
+    res2 = client.post("/api/v1/posts", json=payload, headers=headers)
+    assert res2.status_code in [200, 201]
+    post2_id = res2.json()["id"]
+
+    # Must be the exact same post ID
+    assert post1_id == post2_id
+
+    # Verify database has only 1 post for this user
+    count = db_session.query(Post).filter(Post.user_id == user_id).count()
+    assert count == 1
+

@@ -59,20 +59,15 @@ def _dispatch_email_task_safely(notification_id: str):
     """
     Fire-and-forget helper to dispatch the Celery email task.
     Safely handles cases where Celery broker is offline or during testing.
+    Never blocks or executes synchronous SMTP email sending in the HTTP request thread.
     """
     try:
         from app.worker.tasks import send_notification_email_task
-        # Try Celery async dispatch
-        send_notification_email_task.delay(notification_id)
+        # Try Celery async dispatch without retry blocking
+        send_notification_email_task.apply_async(args=[notification_id], retry=False)
         logger.debug(f"Dispatched async email task for notification #{notification_id}")
     except Exception as exc:
-        logger.info(f"Could not dispatch async Celery email task ({exc}). Running inline or marking pending.")
-        try:
-            # Fallback: execute task synchronously if Celery broker is unavailable
-            from app.worker.tasks import send_notification_email_task
-            send_notification_email_task(notification_id)
-        except Exception as inline_exc:
-            logger.warning(f"Inline email task execution error (non-fatal): {inline_exc}")
+        logger.warning(f"Could not dispatch async Celery email task ({exc}). Notification #{notification_id} remains pending.")
 
 
 # ---------------------------------------------------------------------------

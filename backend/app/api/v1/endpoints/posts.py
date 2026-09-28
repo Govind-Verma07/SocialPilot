@@ -10,7 +10,7 @@ Provides:
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
@@ -261,6 +261,35 @@ async def create_scheduled_post(
             )
 
     try:
+        # Prevent duplicate post creation if retried after network/client timeout
+        if target_status == "scheduled" and payload.scheduled_at:
+            recent_threshold = datetime.now(timezone.utc) - timedelta(minutes=2)
+            existing_duplicate = (
+                db.query(Post)
+                .filter(
+                    Post.user_id == current_user.id,
+                    Post.content == (payload.content or "").strip(),
+                    Post.post_type == p_type,
+                    Post.status == PostStatus.scheduled.value,
+                    Post.scheduled_at == payload.scheduled_at,
+                    Post.created_at >= recent_threshold,
+                )
+                .order_by(Post.created_at.desc())
+                .first()
+            )
+            if existing_duplicate:
+                existing_acc_ids = {psa.social_account_id for psa in existing_duplicate.social_accounts}
+                requested_acc_ids = set(payload.social_account_ids or [])
+                if existing_acc_ids == requested_acc_ids:
+                    logger.info(
+                        f"Duplicate post creation prevented for user {current_user.id}. Returning existing post #{existing_duplicate.id}"
+                    )
+                    post_dict = _serialize_post(existing_duplicate)
+                    post_dict["media_ids"] = effective_media_ids
+                    post_dict["media_items"] = effective_media_items
+                    post_dict["metadata"] = payload.metadata or {}
+                    return PostResponse(**post_dict)
+
         media_urls = list(payload.media_urls or [])
         if not media_urls and effective_media_ids:
             media_urls = [MediaService.get_public_media_url(mid) for mid in effective_media_ids]

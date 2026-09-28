@@ -55,6 +55,38 @@ export default function App() {
             }
           />
           <Route
+            path="/calendar"
+            element={
+              <ProtectedRoute>
+                <Navigate to="/posts?tab=calendar" replace />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/drafts"
+            element={
+              <ProtectedRoute>
+                <Navigate to="/posts?tab=drafts" replace />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/recurring-posts"
+            element={
+              <ProtectedRoute>
+                <Navigate to="/posts?tab=recurring" replace />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/publishing-queue"
+            element={
+              <ProtectedRoute>
+                <Navigate to="/posts?tab=queue" replace />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/campaigns"
             element={
               <ProtectedRoute>
